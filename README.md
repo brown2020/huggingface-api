@@ -1,4 +1,3 @@
-````markdown
 # HuggingFace API Integration with Next.js 14
 
 This project is a demo application that showcases how to integrate the Hugging Face API with a Next.js 14 application using the App Router. The demo includes various NLP and image processing tasks like text completion, translation, image-to-text, and text-to-image generation.
@@ -25,7 +24,6 @@ This project is a demo application that showcases how to integrate the Hugging F
    git clone https://github.com/yourusername/huggingface-api.git
    cd huggingface-api
    ```
-````
 
 2. **Install dependencies:**
 
@@ -82,7 +80,3 @@ Contributions are welcome! Please open an issue or submit a pull request for any
 ## License
 
 This project is licensed under the MIT License.
-
-```
-
-```
