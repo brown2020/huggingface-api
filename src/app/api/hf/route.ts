@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { inference } from "@/utils/hf";
-import fs from "fs/promises";
-import path from "path";
 
 export async function POST(request: Request) {
   const url = new URL(request.url);
@@ -72,39 +70,6 @@ export async function POST(request: Request) {
 
       console.log("output", out);
       return NextResponse.json({ message: out }, { status: 200 });
-    }
-
-    if (type === "ttimg") {
-      const prompt = formData.get("prompt") as string;
-      if (!prompt) {
-        throw new Error("Prompt parameter is required for type 'ttimg'");
-      }
-
-      const out = await inference.textToImage({
-        model: "stabilityai/stable-diffusion-xl-base-1.0",
-        inputs: prompt,
-        parameters: {
-          negative_prompt: "blurry",
-        },
-      });
-
-      console.log("output", out);
-      const buffer = Buffer.from(await out.arrayBuffer());
-
-      const imagePath = path.join(
-        process.cwd(),
-        "public",
-        "images",
-        "generated-image.jpg"
-      );
-
-      await fs.writeFile(imagePath, buffer);
-
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-      const imageUrl = `${baseUrl}/images/generated-image.jpg`;
-
-      return NextResponse.json({ message: imageUrl }, { status: 200 });
     }
 
     if (type === "ttpng") {

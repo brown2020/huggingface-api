@@ -31,7 +31,7 @@ export default function HuggingFace({}: Props) {
       formData.append("text", text);
     } else if (type === "imgtt" && image) {
       formData.append("image", image);
-    } else if (type === "ttimg" || type === "ttpng") {
+    } else if (type === "ttpng") {
       formData.append("prompt", prompt);
     } else {
       setError("Invalid type or missing required input");
@@ -54,9 +54,6 @@ export default function HuggingFace({}: Props) {
         const blob = await response.blob();
         const imageUrl = URL.createObjectURL(blob);
         setImageResult(imageUrl);
-      } else if (type === "ttimg") {
-        const data = await response.json();
-        setImageResult(data.message); // Assuming message contains the image URL
       } else {
         const data = await response.json();
         setResult(JSON.stringify(data.message, null, 2));
@@ -87,7 +84,6 @@ export default function HuggingFace({}: Props) {
             <option value="comp">Completion</option>
             <option value="translation">Translation</option>
             <option value="imgtt">Image to Text</option>
-            <option value="ttimg">Text to Image</option>
             <option value="ttpng">Text to PNG</option>
           </select>
         </div>
