@@ -4,9 +4,7 @@
 import { useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
 
-type Props = {};
-
-export default function HuggingFace({}: Props) {
+export default function HuggingFace() {
   const [type, setType] = useState("");
   const [message, setMessage] = useState("");
   const [text, setText] = useState("");
@@ -58,9 +56,14 @@ export default function HuggingFace({}: Props) {
         const data = await response.json();
         setResult(JSON.stringify(data.message, null, 2));
       }
-    } catch (error: any) {
-      console.error("Error:", error);
-      setError(error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Error:", error);
+        setError(error.message);
+      } else {
+        console.error("Unexpected error:", error);
+        setError("An unexpected error occurred.");
+      }
     } finally {
       setLoading(false);
     }

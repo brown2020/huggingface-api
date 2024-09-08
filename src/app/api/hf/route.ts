@@ -99,11 +99,19 @@ export async function POST(request: Request) {
     }
 
     throw new Error("Unsupported type parameter");
-  } catch (error: any) {
-    console.error(error);
-    return NextResponse.json(
-      { error: error?.message || "Unknown error" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error(error);
+      return NextResponse.json(
+        { error: error.message || "Unknown error" },
+        { status: 500 }
+      );
+    } else {
+      console.error("Unexpected error:", error);
+      return NextResponse.json(
+        { error: "An unexpected error occurred" },
+        { status: 500 }
+      );
+    }
   }
 }
