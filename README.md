@@ -21,7 +21,7 @@ This project is a demo application that showcases how to integrate the Hugging F
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/yourusername/huggingface-api.git
+   git clone https://github.com/brown2020/huggingface-api.git
    cd huggingface-api
    ```
 
