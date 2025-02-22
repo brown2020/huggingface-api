@@ -169,7 +169,9 @@ export default function HuggingFace() {
       {result && (
         <div className="mt-4">
           <h2 className="text-xl font-bold">Result</h2>
-          <pre className="bg-gray-100 p-4 rounded-md">{result}</pre>
+          <pre className="bg-gray-100 p-4 rounded-md whitespace-pre-wrap">
+            {result}
+          </pre>
         </div>
       )}
       {imageResult && (
