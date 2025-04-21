@@ -24,8 +24,11 @@ export async function POST(request: Request) {
       }
       console.log("message", message);
 
+      const modelId = "deepseek-ai/deepseek-v3-0324";
+      const provider = "fireworks-ai";
+
       const out = await inference.chatCompletion({
-        model: "mistralai/Mistral-7B-Instruct-v0.2",
+        model: modelId,
         messages: [
           {
             role: "user",
@@ -33,6 +36,7 @@ export async function POST(request: Request) {
           },
         ],
         max_tokens: 1000,
+        provider: provider,
       });
 
       console.log(out.choices[0].message);
@@ -49,13 +53,26 @@ export async function POST(request: Request) {
         throw new Error("Text parameter is required for type 'translation'");
       }
 
-      const out = await inference.translation({
-        model: "t5-base",
-        inputs: text,
+      const modelId = "deepseek-ai/deepseek-v3-0324";
+      const provider = "fireworks-ai";
+
+      const out = await inference.chatCompletion({
+        model: modelId,
+        messages: [
+          {
+            role: "user",
+            content: `Translate the following text to French: "${text}"`,
+          },
+        ],
+        max_tokens: 1000,
+        provider: provider,
       });
 
-      console.log("output", out);
-      return NextResponse.json({ message: out }, { status: 200 });
+      console.log("output", out.choices[0].message);
+      return NextResponse.json(
+        { message: out.choices[0].message.content },
+        { status: 200 }
+      );
     }
 
     if (type === "imgtt") {
@@ -63,13 +80,14 @@ export async function POST(request: Request) {
       if (!imageBlob) {
         throw new Error("No image provided");
       }
-      const out = await inference.imageToText({
-        model: "nlpconnect/vit-gpt2-image-captioning",
-        data: imageBlob,
-      });
 
-      console.log("output", out);
-      return NextResponse.json({ message: out }, { status: 200 });
+      return NextResponse.json(
+        {
+          message:
+            "Image analysis functionality is currently unavailable. We're working on a fix.",
+        },
+        { status: 200 }
+      );
     }
 
     if (type === "ttpng") {
@@ -78,12 +96,16 @@ export async function POST(request: Request) {
         throw new Error("Prompt parameter is required for type 'ttpng'");
       }
 
+      const modelId = "stabilityai/stable-diffusion-xl-base-1.0";
+      const provider = "replicate";
+
       const out = await inference.textToImage({
-        model: "stabilityai/stable-diffusion-xl-base-1.0",
+        model: modelId,
         inputs: prompt,
         parameters: {
           negative_prompt: "blurry",
         },
+        provider: provider,
       });
 
       console.log("output", out);
