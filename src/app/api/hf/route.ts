@@ -1,16 +1,33 @@
 import { NextResponse } from "next/server";
-import { inference } from "@/utils/hf";
+import { inference, getBestProvider } from "@/utils/hf";
+import {
+  chatSchema,
+  imageToTextSchema,
+  textToImageSchema,
+  translationSchema,
+  typeSchema,
+} from "@/utils/validation";
+
+type CaptionItem = { generated_text: string };
+const isCaptionItem = (val: unknown): val is CaptionItem =>
+  typeof val === "object" &&
+  val !== null &&
+  "generated_text" in val &&
+  typeof (val as { generated_text?: unknown }).generated_text === "string";
+const isCaptionArray = (val: unknown): val is CaptionItem[] =>
+  Array.isArray(val) && val.every(isCaptionItem);
 
 export async function POST(request: Request) {
   const url = new URL(request.url);
-  const type = url.searchParams.get("type");
-
-  if (!type) {
+  const typeParam = url.searchParams.get("type");
+  const parsing = typeSchema.safeParse(typeParam);
+  if (!parsing.success) {
     return NextResponse.json(
-      { error: "Type parameter is required" },
+      { error: "Invalid type parameter" },
       { status: 400 }
     );
   }
+  const type = parsing.data;
 
   const formData = await request.formData();
 
@@ -18,13 +35,19 @@ export async function POST(request: Request) {
     console.log("type", type);
 
     if (type === "comp") {
-      const message = formData.get("message") as string;
-      if (!message) {
-        throw new Error("Message parameter is required for type 'comp'");
+      const parsed = chatSchema.safeParse({
+        message: formData.get("message"),
+        model: formData.get("model") || undefined,
+        max_tokens: formData.get("max_tokens") || undefined,
+      });
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: parsed.error.flatten() },
+          { status: 400 }
+        );
       }
-      console.log("message", message);
-
-      const modelId = "deepseek-ai/deepseek-v3-0324";
+      const { message, max_tokens, model } = parsed.data;
+      const modelId = model || "deepseek-ai/deepseek-v3-0324";
       const provider = "fireworks-ai";
 
       const out = await inference.chatCompletion({
@@ -35,11 +58,9 @@ export async function POST(request: Request) {
             content: message,
           },
         ],
-        max_tokens: 1000,
+        max_tokens: max_tokens || 1000,
         provider: provider,
       });
-
-      console.log(out.choices[0].message);
 
       return NextResponse.json(
         { message: out.choices[0].message },
@@ -48,12 +69,19 @@ export async function POST(request: Request) {
     }
 
     if (type === "translation") {
-      const text = formData.get("text") as string;
-      if (!text) {
-        throw new Error("Text parameter is required for type 'translation'");
+      const parsed = translationSchema.safeParse({
+        text: formData.get("text"),
+        targetLang: formData.get("targetLang") || undefined,
+        model: formData.get("model") || undefined,
+      });
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: parsed.error.flatten() },
+          { status: 400 }
+        );
       }
-
-      const modelId = "deepseek-ai/deepseek-v3-0324";
+      const { text, targetLang, model } = parsed.data;
+      const modelId = model || "deepseek-ai/deepseek-v3-0324";
       const provider = "fireworks-ai";
 
       const out = await inference.chatCompletion({
@@ -61,14 +89,15 @@ export async function POST(request: Request) {
         messages: [
           {
             role: "user",
-            content: `Translate the following text to French: "${text}"`,
+            content: `Translate the following text to ${
+              targetLang || "French"
+            }: "${text}"`,
           },
         ],
         max_tokens: 1000,
         provider: provider,
       });
 
-      console.log("output", out.choices[0].message);
       return NextResponse.json(
         { message: out.choices[0].message.content },
         { status: 200 }
@@ -76,39 +105,44 @@ export async function POST(request: Request) {
     }
 
     if (type === "imgtt") {
-      const imageBlob = formData.get("image") as Blob;
-      if (!imageBlob) {
-        throw new Error("No image provided");
-      }
-
       return NextResponse.json(
         {
-          message:
-            "Image analysis functionality is currently unavailable. We're working on a fix.",
+          error:
+            "Image-to-text is disabled because no supported inference provider is configured.",
         },
-        { status: 200 }
+        { status: 501 }
       );
     }
 
     if (type === "ttpng") {
-      const prompt = formData.get("prompt") as string;
-      if (!prompt) {
-        throw new Error("Prompt parameter is required for type 'ttpng'");
-      }
-
-      const modelId = "stabilityai/stable-diffusion-xl-base-1.0";
-      const provider = "replicate";
-
-      const out = await inference.textToImage({
-        model: modelId,
-        inputs: prompt,
-        parameters: {
-          negative_prompt: "blurry",
-        },
-        provider: provider,
+      const parsed = textToImageSchema.safeParse({
+        prompt: formData.get("prompt"),
+        negative_prompt: formData.get("negative_prompt") || undefined,
+        model: formData.get("model") || undefined,
       });
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: parsed.error.flatten() },
+          { status: 400 }
+        );
+      }
+      const { prompt, negative_prompt, model } = parsed.data;
 
-      console.log("output", out);
+      const modelId = model || "stabilityai/stable-diffusion-xl-base-1.0";
+      const provider = getBestProvider(modelId, "textToImage");
+
+      const out = await inference.textToImage(
+        {
+          model: modelId,
+          inputs: prompt,
+          parameters: {
+            negative_prompt: negative_prompt || "blurry",
+          },
+          provider: provider,
+        },
+        { outputType: "blob" }
+      );
+
       const buffer = Buffer.from(await out.arrayBuffer());
 
       return new Response(buffer, {

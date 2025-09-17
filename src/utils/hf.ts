@@ -1,4 +1,7 @@
-import { HfInference } from "@huggingface/inference";
+import {
+  HfInference,
+  type InferenceProviderOrPolicy,
+} from "@huggingface/inference";
 
 const HF_TOKEN = process.env.HF_TOKEN;
 
@@ -6,9 +9,12 @@ const HF_TOKEN = process.env.HF_TOKEN;
 export const inference = new HfInference(HF_TOKEN);
 
 // Helper function to determine the best provider for a given model and task
-export const getBestProvider = (modelId: string, task: string): string => {
+export const getBestProvider = (
+  modelId: string,
+  task: string
+): InferenceProviderOrPolicy => {
   // Using a mapping optimized for Fireworks.ai and Replicate
-  const providerMap: Record<string, string> = {
+  const providerMap: Record<string, InferenceProviderOrPolicy> = {
     // Fireworks.ai - best for large LLMs and select image models
     // LLMs
     "mistralai/Mistral-7B-Instruct-v0.2": "fireworks-ai",
@@ -55,8 +61,11 @@ export const getBestProvider = (modelId: string, task: string): string => {
     // Translation models
     "t5-base": "replicate",
 
-    // Image-to-text models
-    "nlpconnect/vit-gpt2-image-captioning": "replicate",
+    // Image-to-text models (use HF Inference which supports this task)
+    "Salesforce/blip-image-captioning-base": "hf-inference",
+    "Salesforce/blip-image-captioning-large": "hf-inference",
+    "microsoft/git-large-coco": "hf-inference",
+    "nlpconnect/vit-gpt2-image-captioning": "hf-inference",
   };
 
   // Choose provider based on the task if no specific model mapping exists
@@ -65,6 +74,8 @@ export const getBestProvider = (modelId: string, task: string): string => {
       return "replicate"; // Replicate has more diverse image model options
     } else if (task === "chatCompletion" || task === "textGeneration") {
       return "fireworks-ai"; // Fireworks has optimized LLM infrastructure
+    } else if (task === "imageToText") {
+      return "hf-inference"; // Image captioning supported on HF Inference
     }
   }
 
