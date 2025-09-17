@@ -1,21 +1,14 @@
 import { NextResponse } from "next/server";
 import { inference, getBestProvider } from "@/utils/hf";
+import { captionWithLlava13bUrl } from "@/utils/replicate";
 import {
   chatSchema,
-  imageToTextSchema,
   textToImageSchema,
   translationSchema,
   typeSchema,
 } from "@/utils/validation";
 
-type CaptionItem = { generated_text: string };
-const isCaptionItem = (val: unknown): val is CaptionItem =>
-  typeof val === "object" &&
-  val !== null &&
-  "generated_text" in val &&
-  typeof (val as { generated_text?: unknown }).generated_text === "string";
-const isCaptionArray = (val: unknown): val is CaptionItem[] =>
-  Array.isArray(val) && val.every(isCaptionItem);
+// Removed local image-to-text type guards as imgtt uses Replicate now
 
 export async function POST(request: Request) {
   const url = new URL(request.url);
@@ -105,12 +98,25 @@ export async function POST(request: Request) {
     }
 
     if (type === "imgtt") {
+      const imageFile = formData.get("image") as File | null;
+      if (!imageFile) {
+        return NextResponse.json(
+          { error: "Image is required" },
+          { status: 400 }
+        );
+      }
+      // Convert file to data URL; Replicate run accepts URL strings for media
+      const arrayBuffer = await imageFile.arrayBuffer();
+      const base64 = Buffer.from(arrayBuffer).toString("base64");
+      const dataUrl = `data:${imageFile.type};base64,${base64}`;
+      // Use Replicate LLaVA-13B as an alternate provider for HF model compatibility
+      const output = await captionWithLlava13bUrl({ imageUrl: dataUrl });
       return NextResponse.json(
         {
-          error:
-            "Image-to-text is disabled because no supported inference provider is configured.",
+          message: output,
+          note: "No HF Inference provider available for this HF model; using Replicate LLaVA-13B via REPLICATE_API_TOKEN.",
         },
-        { status: 501 }
+        { status: 200 }
       );
     }
 

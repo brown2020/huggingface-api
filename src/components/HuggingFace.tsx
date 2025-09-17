@@ -86,7 +86,7 @@ export default function HuggingFace() {
             <option value="">Select type</option>
             <option value="comp">Completion</option>
             <option value="translation">Translation</option>
-            {/* Image-to-Text temporarily disabled due to provider limitations */}
+            <option value="imgtt">Image to Text</option>
             <option value="ttpng">Text to PNG</option>
           </select>
         </div>
@@ -118,7 +118,22 @@ export default function HuggingFace() {
             />
           </div>
         )}
-        {/* Image upload field removed while imgtt is disabled */}
+        {type === "imgtt" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Image
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) =>
+                setImage(e.target.files ? e.target.files[0] : null)
+              }
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+              required
+            />
+          </div>
+        )}
         {(type === "ttimg" || type === "ttpng") && (
           <div>
             <label className="block text-sm font-medium text-gray-700">
