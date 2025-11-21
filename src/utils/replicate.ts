@@ -40,7 +40,7 @@ export async function captionWithVideoLlavaUrl(input: VideoLlavaUrlInput) {
       videos: [input.imageUrl],
       prompts: [input.prompt ?? "Describe the content"],
     },
-    wait: { interval: 1000 },
+    wait: { mode: "block", interval: 1000 },
   })) as unknown;
 
   return output;
@@ -82,7 +82,7 @@ export async function captionWithLlava13bUrl(input: VideoLlavaUrlInput) {
       prompt: input.prompt ?? "Describe the image",
       question: input.prompt ?? "Describe the image",
     },
-    wait: { interval: 1000 },
+    wait: { mode: "block", interval: 1000 },
   })) as unknown;
 
   return output;
