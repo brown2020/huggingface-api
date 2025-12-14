@@ -1,11 +1,12 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
 
 export default function HuggingFace() {
-  const [type, setType] = useState("");
+  const [type, setType] = useState<
+    "" | "comp" | "translation" | "imgtt" | "ttpng"
+  >("");
   const [message, setMessage] = useState("");
   const [text, setText] = useState("");
   const [image, setImage] = useState<File | null>(null);
@@ -15,22 +16,51 @@ export default function HuggingFace() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    return () => {
+      if (imageResult?.startsWith("blob:")) URL.revokeObjectURL(imageResult);
+    };
+  }, [imageResult]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setResult(null);
-    setImageResult(null);
+    setImageResult((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return null;
+    });
     setLoading(true);
 
-    const formData = new FormData();
-    if (type === "comp") {
-      formData.append("message", message);
-    } else if (type === "translation") {
-      formData.append("text", text);
-    } else if (type === "imgtt" && image) {
+    let requestInit: RequestInit | null = null;
+    if (type === "imgtt") {
+      if (!image) {
+        setError("Missing image");
+        setLoading(false);
+        return;
+      }
+
+      const formData = new FormData();
       formData.append("image", image);
+      requestInit = { method: "POST", body: formData };
+    } else if (type === "comp") {
+      requestInit = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      };
+    } else if (type === "translation") {
+      requestInit = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      };
     } else if (type === "ttpng") {
-      formData.append("prompt", prompt);
+      requestInit = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      };
     } else {
       setError("Invalid type or missing required input");
       setLoading(false);
@@ -38,10 +68,7 @@ export default function HuggingFace() {
     }
 
     try {
-      const response = await fetch(`/api/hf?type=${type}`, {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(`/api/hf?type=${type}`, requestInit);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -79,7 +106,16 @@ export default function HuggingFace() {
           </label>
           <select
             value={type}
-            onChange={(e) => setType(e.target.value)}
+            onChange={(e) =>
+              setType(
+                e.target.value as
+                  | ""
+                  | "comp"
+                  | "translation"
+                  | "imgtt"
+                  | "ttpng"
+              )
+            }
             className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
             required
           >
@@ -134,7 +170,7 @@ export default function HuggingFace() {
             />
           </div>
         )}
-        {(type === "ttimg" || type === "ttpng") && (
+        {type === "ttpng" && (
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Prompt
@@ -178,6 +214,7 @@ export default function HuggingFace() {
       {imageResult && (
         <div className="mt-4">
           <h2 className="text-xl font-bold">Generated Image</h2>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imageResult} alt="Generated" className="rounded-md" />
         </div>
       )}

@@ -1,9 +1,14 @@
+import "server-only";
 import {
   HfInference,
   type InferenceProviderOrPolicy,
 } from "@huggingface/inference";
 
 const HF_TOKEN = process.env.HF_TOKEN;
+
+if (!HF_TOKEN) {
+  throw new Error("HF_TOKEN is not set");
+}
 
 // Create the main inference client with Hugging Face token
 export const inference = new HfInference(HF_TOKEN);
