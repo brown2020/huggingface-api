@@ -9,11 +9,25 @@ This project is a demo application that showcases how to integrate the Hugging F
 - **Image to Text:** Image captioning via Replicate (LLaVA-13B).
 - **Text to Image:** PNG generation via HF Inference `textToImage`.
 
+## Tech Stack (current)
+
+This repo is currently pinned (via `package-lock.json`) to:
+
+- **Next.js**: `16.1.1`
+- **React / React DOM**: `19.2.3`
+- **Hugging Face Inference SDK**: `@huggingface/inference@4.13.5`
+- **Replicate SDK**: `replicate@1.4.0`
+- **Validation**: `zod@4.2.1`
+
+### Runtime requirements
+
+- **Node.js**: `>= 20.9.0` (required by Next.js `16.1.1`)
+
 ## Getting Started
 
 ### Prerequisites
 
-- **Node.js:** Ensure Node.js is installed.
+- **Node.js:** `>= 20.9.0` (required by Next.js `16.1.1`).
 - **Hugging Face API Key:** Register at Hugging Face and obtain an API key.
 
 ### Installation
@@ -34,10 +48,12 @@ This project is a demo application that showcases how to integrate the Hugging F
 3. **Configure environment variables:**
 
    - Copy `.env.example` to `.env.local`.
-   - Add your Hugging Face API key to the `.env.local` file:
+   - Add your Hugging Face API key to the `.env.local` file.
+   - (Optional) Add your Replicate API token if you want to use the Image-to-Text feature.
 
    ```bash
    HF_TOKEN=your_huggingface_token_here
+   REPLICATE_API_TOKEN=your_replicate_token_here
    ```
 
 ### Running the Development Server
@@ -80,4 +96,4 @@ Contributions are welcome! Please open an issue or submit a pull request for any
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See `LICENSE.md`.
