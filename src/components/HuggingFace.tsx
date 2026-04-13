@@ -85,10 +85,8 @@ export default function HuggingFace() {
       }
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.error("Error:", error);
         setError(error.message);
       } else {
-        console.error("Unexpected error:", error);
         setError("An unexpected error occurred.");
       }
     } finally {
@@ -187,7 +185,8 @@ export default function HuggingFace() {
         <div>
           <button
             type="submit"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700"
+            disabled={loading}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Submit
           </button>
@@ -214,7 +213,6 @@ export default function HuggingFace() {
       {imageResult && (
         <div className="mt-4">
           <h2 className="text-xl font-bold">Generated Image</h2>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imageResult} alt="Generated" className="rounded-md" />
         </div>
       )}
