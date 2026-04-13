@@ -30,6 +30,7 @@ export default [
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs["core-web-vitals"].rules,
       ...tseslint.configs.recommended.rules,
+      "@next/next/no-img-element": "off",
     },
   },
 ];

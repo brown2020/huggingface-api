@@ -8,8 +8,6 @@ import {
   typeSchema,
 } from "@/utils/validation";
 
-// Removed local image-to-text type guards as imgtt uses Replicate now
-
 export const runtime = "nodejs";
 
 type HfRouteType = "comp" | "translation" | "imgtt" | "ttpng";

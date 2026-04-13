@@ -3,9 +3,9 @@ import Replicate from "replicate";
 
 const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
 
-export const replicate = new Replicate({ auth: REPLICATE_API_TOKEN || "" });
+const replicate = new Replicate({ auth: REPLICATE_API_TOKEN || "" });
 
-export type CaptionImageInput = {
+type CaptionImageInput = {
   imageUrl: string;
   prompt?: string;
 };

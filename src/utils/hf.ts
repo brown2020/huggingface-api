@@ -6,12 +6,24 @@ import {
 
 const HF_TOKEN = process.env.HF_TOKEN;
 
-if (!HF_TOKEN) {
-  throw new Error("HF_TOKEN is not set");
+function getInference(): HfInference {
+  if (!HF_TOKEN) {
+    throw new Error("HF_TOKEN is not set");
+  }
+  return new HfInference(HF_TOKEN);
 }
 
-// Create the main inference client with Hugging Face token
-export const inference = new HfInference(HF_TOKEN);
+// Create the main inference client with Hugging Face token (lazy to avoid build-time crash)
+export const inference = new Proxy({} as HfInference, {
+  get(_, prop) {
+    const instance = getInference();
+    const value = instance[prop as keyof HfInference];
+    if (typeof value === "function") {
+      return value.bind(instance);
+    }
+    return value;
+  },
+});
 
 // Helper function to determine the best provider for a given model and task
 export const getBestProvider = (
