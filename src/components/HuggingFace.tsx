@@ -1,39 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
 
+type TaskType = "" | "comp" | "translation" | "imgtt" | "ttpng";
+
+/** Convert a blob to a data URL without createObjectURL (React Doctor-safe). */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("Failed to read image blob"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export default function HuggingFace() {
-  const [type, setType] = useState<
-    "" | "comp" | "translation" | "imgtt" | "ttpng"
-  >("");
+  const [type, setType] = useState<TaskType>("");
   const [message, setMessage] = useState("");
   const [text, setText] = useState("");
-  const [image, setImage] = useState<File | null>(null);
+  const imageRef = useRef<File | null>(null);
+  const [hasImage, setHasImage] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<string | null>(null);
   const [imageResult, setImageResult] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    return () => {
-      if (imageResult?.startsWith("blob:")) URL.revokeObjectURL(imageResult);
-    };
-  }, [imageResult]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setResult(null);
-    setImageResult((prev) => {
-      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-      return null;
-    });
+    setImageResult(null);
     setLoading(true);
 
     let requestInit: RequestInit | null = null;
     if (type === "imgtt") {
+      const image = imageRef.current;
       if (!image) {
         setError("Missing image");
         setLoading(false);
@@ -77,15 +81,15 @@ export default function HuggingFace() {
 
       if (type === "ttpng") {
         const blob = await response.blob();
-        const imageUrl = URL.createObjectURL(blob);
-        setImageResult(imageUrl);
+        const dataUrl = await blobToDataUrl(blob);
+        setImageResult(dataUrl);
       } else {
         const data = await response.json();
         setResult(JSON.stringify(data.message, null, 2));
       }
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        setError(error.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
       } else {
         setError("An unexpected error occurred.");
       }
@@ -96,26 +100,29 @@ export default function HuggingFace() {
 
   return (
     <div className="flex flex-col p-4 w-full">
-      <h1 className="text-2xl font-bold mb-4">HuggingFace API Interface</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <h1 className="text-2xl font-bold mb-4 text-gray-900">
+        HuggingFace API Interface
+      </h1>
+      <p className="mb-4 text-sm text-gray-700">
+        Demo for chat completion, translation, image captioning, and text-to-image
+        via Hugging Face Inference Providers (and Replicate for LLaVA captioning).
+        Prefer fixtures in CI — see AGENTS.md.
+      </p>
+      <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label
+            htmlFor="hf-task-type"
+            className="block text-sm font-medium text-gray-800"
+          >
             Type
           </label>
           <select
+            id="hf-task-type"
             value={type}
-            onChange={(e) =>
-              setType(
-                e.target.value as
-                  | ""
-                  | "comp"
-                  | "translation"
-                  | "imgtt"
-                  | "ttpng"
-              )
-            }
-            className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+            onChange={(e) => setType(e.target.value as TaskType)}
+            className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white"
             required
+            aria-required="true"
           >
             <option value="">Select type</option>
             <option value="comp">Completion</option>
@@ -126,59 +133,81 @@ export default function HuggingFace() {
         </div>
         {type === "comp" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="hf-message"
+              className="block text-sm font-medium text-gray-800"
+            >
               Message
             </label>
             <input
+              id="hf-message"
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white"
               required
+              aria-required="true"
             />
           </div>
         )}
         {type === "translation" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="hf-text"
+              className="block text-sm font-medium text-gray-800"
+            >
               Text
             </label>
             <input
+              id="hf-text"
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white"
               required
+              aria-required="true"
             />
           </div>
         )}
         {type === "imgtt" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="hf-image"
+              className="block text-sm font-medium text-gray-800"
+            >
               Image
             </label>
             <input
+              id="hf-image"
               type="file"
               accept="image/*"
-              onChange={(e) =>
-                setImage(e.target.files ? e.target.files[0] : null)
-              }
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-              required
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                imageRef.current = file;
+                setHasImage(Boolean(file));
+              }}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white"
+              required={!hasImage}
+              aria-required="true"
             />
           </div>
         )}
         {type === "ttpng" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="hf-prompt"
+              className="block text-sm font-medium text-gray-800"
+            >
               Prompt
             </label>
             <input
+              id="hf-prompt"
               type="text"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white"
               required
+              aria-required="true"
             />
           </div>
         )}
@@ -186,34 +215,39 @@ export default function HuggingFace() {
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-800 hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Submit
           </button>
         </div>
       </form>
       {loading && (
-        <div className="flex justify-center mt-4">
-          <ClipLoader size={50} color={"#123abc"} loading={loading} />
+        <div
+          className="flex justify-center mt-4"
+          role="status"
+          aria-live="polite"
+        >
+          <ClipLoader size={50} color={"#1e3a8a"} loading={loading} />
+          <span className="sr-only">Loading</span>
         </div>
       )}
       {error && (
-        <div className="mt-4 text-red-600">
+        <div className="mt-4 text-red-700" role="alert">
           <strong>Error:</strong> {error}
         </div>
       )}
       {result && (
         <div className="mt-4">
-          <h2 className="text-xl font-bold">Result</h2>
-          <pre className="bg-gray-100 p-4 rounded-md whitespace-pre-wrap">
+          <h2 className="text-xl font-bold text-gray-900">Result</h2>
+          <pre className="bg-gray-100 p-4 rounded-md whitespace-pre-wrap text-gray-900">
             {result}
           </pre>
         </div>
       )}
       {imageResult && (
         <div className="mt-4">
-          <h2 className="text-xl font-bold">Generated Image</h2>
-          <img src={imageResult} alt="Generated" className="rounded-md" />
+          <h2 className="text-xl font-bold text-gray-900">Generated Image</h2>
+          <img src={imageResult} alt="Generated from prompt" className="rounded-md" />
         </div>
       )}
     </div>

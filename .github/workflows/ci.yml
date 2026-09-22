@@ -1,0 +1,28 @@
+name: ci
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    # HF_TOKEN / REPLICATE_API_TOKEN are optional for this gate.
+    # Build and tests use HF_USE_FIXTURES=true so paid credits are not burned.
+    # Never inline HF_TOKEN, REPLICATE_*, or NEXT_PUBLIC_* here — if a future
+    # smoke job needs secrets, inject only via ${{ secrets.* }} on that job
+    # (not this gate), and keep deferred client init in src/utils/*.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+        env:
+          HF_USE_FIXTURES: "true"
+      - run: npm run build
+        env:
+          HF_USE_FIXTURES: "true"

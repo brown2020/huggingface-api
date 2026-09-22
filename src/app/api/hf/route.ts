@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import { inference, getBestProvider } from "@/utils/hf";
+import {
+  FIXTURE_COMPLETION,
+  FIXTURE_IMAGE_CAPTION,
+  FIXTURE_TRANSLATION,
+  fixturePngBuffer,
+  hfFixturesEnabled,
+} from "@/utils/hf-fixtures";
 import { captionWithLlava13bUrl } from "@/utils/replicate";
 import {
   chatSchema,
@@ -37,6 +44,13 @@ async function handleCompletion(request: Request) {
   const parsed = chatSchema.safeParse(body);
   if (!parsed.success) return jsonError(400, parsed.error.flatten());
 
+  if (hfFixturesEnabled()) {
+    return NextResponse.json({
+      message: FIXTURE_COMPLETION,
+      fixture: true,
+    });
+  }
+
   const { message, max_tokens, model } = parsed.data;
   const modelId = model || "deepseek-ai/deepseek-v3-0324";
   const provider = getBestProvider(modelId, "chatCompletion");
@@ -55,6 +69,13 @@ async function handleTranslation(request: Request) {
   const body = await readBodyAsObject(request);
   const parsed = translationSchema.safeParse(body);
   if (!parsed.success) return jsonError(400, parsed.error.flatten());
+
+  if (hfFixturesEnabled()) {
+    return NextResponse.json({
+      message: FIXTURE_TRANSLATION,
+      fixture: true,
+    });
+  }
 
   const { text, targetLang, model } = parsed.data;
   const modelId = model || "deepseek-ai/deepseek-v3-0324";
@@ -82,6 +103,14 @@ async function handleImageToText(request: Request) {
   const imageFile = formData.get("image") as File | null;
   if (!imageFile) return jsonError(400, "Image is required");
 
+  if (hfFixturesEnabled()) {
+    return NextResponse.json({
+      message: FIXTURE_IMAGE_CAPTION,
+      fixture: true,
+      note: "Fixture mode — Replicate not called.",
+    });
+  }
+
   const arrayBuffer = await imageFile.arrayBuffer();
   const base64 = Buffer.from(arrayBuffer).toString("base64");
   const dataUrl = `data:${imageFile.type};base64,${base64}`;
@@ -98,6 +127,18 @@ async function handleTextToPng(request: Request) {
   const parsed = textToImageSchema.safeParse(body);
   if (!parsed.success) return jsonError(400, parsed.error.flatten());
 
+  if (hfFixturesEnabled()) {
+    const buffer = fixturePngBuffer();
+    return new Response(new Uint8Array(buffer), {
+      status: 200,
+      headers: {
+        "Content-Type": "image/png",
+        "Content-Disposition": "inline; filename=fixture-image.png",
+        "X-HF-Fixture": "true",
+      },
+    });
+  }
+
   const { prompt, negative_prompt, model } = parsed.data;
   const modelId = model || "stabilityai/stable-diffusion-xl-base-1.0";
   const provider = getBestProvider(modelId, "textToImage");
@@ -113,7 +154,7 @@ async function handleTextToPng(request: Request) {
   );
 
   const buffer = Buffer.from(await out.arrayBuffer());
-  return new Response(buffer, {
+  return new Response(new Uint8Array(buffer), {
     status: 200,
     headers: {
       "Content-Type": "image/png",
@@ -143,10 +184,16 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     if (error instanceof Error) {
       console.error(error);
+      // Never echo secrets; message is still safe for missing-token cases.
       return jsonError(500, error.message || "Unknown error");
     } else {
       console.error("Unexpected error:", error);
       return jsonError(500, "An unexpected error occurred");
     }
   }
+}
+
+/** Deny non-mutation verbs on this write route (stack proof / security tests). */
+export async function GET() {
+  return jsonError(405, "Method not allowed");
 }
