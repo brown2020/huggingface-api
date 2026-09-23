@@ -3,6 +3,10 @@ import {
   HfInference,
   type InferenceProviderOrPolicy,
 } from "@huggingface/inference";
+import {
+  canonicalizeModelId,
+  getCatalogEntry,
+} from "@/utils/models";
 
 const HF_TOKEN = process.env.HF_TOKEN;
 
@@ -25,80 +29,107 @@ export const inference = new Proxy({} as HfInference, {
   },
 });
 
-// Helper function to determine the best provider for a given model and task
+/**
+ * Explicit overrides for models not in the UI catalog (legacy / specialized).
+ * Prefer live Inference Providers; avoid stale Fireworks-only maps for models
+ * that HF no longer routes there (e.g. DeepSeek-V3-0324).
+ */
+const PROVIDER_OVERRIDES: Record<string, InferenceProviderOrPolicy> = {
+  // Chat — live as of 2026-09 Hub inferenceProviderMapping
+  "deepseek-ai/DeepSeek-V3-0324": "auto",
+  "deepseek-ai/DeepSeek-R1": "novita",
+  "deepseek-ai/DeepSeek-V3": "deepinfra",
+  "meta-llama/Llama-3.1-8B-Instruct": "auto",
+  "meta-llama/Llama-3.2-90B-Vision-Instruct": "auto",
+  "meta-llama/Llama-3.1-405B-Instruct": "auto",
+  "meta-llama/Llama-3-8B-Instruct": "auto",
+  "openai/gpt-oss-120b": "auto",
+  "Qwen/Qwen2.5-Coder-32B-Instruct": "auto",
+  "Qwen/Qwen2.5-7B-Instruct": "featherless-ai",
+  "mistralai/Mistral-Small-24B-Instruct-2501": "auto",
+
+  // Image generation
+  "black-forest-labs/FLUX.1-dev": "auto",
+  "black-forest-labs/FLUX.1-schnell": "auto",
+  "stabilityai/stable-diffusion-xl-base-1.0": "fal-ai",
+  "stabilityai/stable-diffusion-3.5-large": "auto",
+  "stabilityai/stable-diffusion-3.5": "auto",
+
+  // Image captioning (HF Inference when available)
+  "Salesforce/blip-image-captioning-base": "hf-inference",
+  "Salesforce/blip-image-captioning-large": "hf-inference",
+  "microsoft/git-large-coco": "hf-inference",
+  "nlpconnect/vit-gpt2-image-captioning": "hf-inference",
+
+  // Replicate-oriented specialty (still valid when user has provider key)
+  "yorickvp/llava-13b": "replicate",
+  "suno/bark": "replicate",
+  "timbrooks/instruct-pix2pix": "replicate",
+};
+
+function isProviderPolicy(value: string): value is InferenceProviderOrPolicy {
+  const known = new Set([
+    "baseten",
+    "black-forest-labs",
+    "cerebras",
+    "clarifai",
+    "cohere",
+    "deepinfra",
+    "fal-ai",
+    "featherless-ai",
+    "fireworks-ai",
+    "groq",
+    "hf-inference",
+    "hyperbolic",
+    "nebius",
+    "novita",
+    "nscale",
+    "nvidia",
+    "openai",
+    "ovhcloud",
+    "publicai",
+    "replicate",
+    "sambanova",
+    "scaleway",
+    "together",
+    "wavespeed",
+    "zai-org",
+    "auto",
+  ]);
+  return known.has(value);
+}
+
+/**
+ * Resolve the best Inference Provider (or "auto") for a model + task.
+ * Catalog entries and explicit overrides win; otherwise task-based defaults
+ * use "auto" so HF picks a live provider instead of a stale hardcoded one.
+ */
 export const getBestProvider = (
   modelId: string,
   task: string
 ): InferenceProviderOrPolicy => {
-  // Using a mapping optimized for Fireworks.ai and Replicate
-  const providerMap: Record<string, InferenceProviderOrPolicy> = {
-    // Fireworks.ai - best for large LLMs and select image models
-    // LLMs
-    "mistralai/Mistral-7B-Instruct-v0.2": "fireworks-ai",
-    "llama-3-70b-instruct": "fireworks-ai",
-    "meta-llama/Llama-3.2-90B-Vision-Instruct": "fireworks-ai", // Vision model
-    "meta-llama/Llama-3.1-405B-Instruct": "fireworks-ai",
-    "meta-llama/Llama-3-8B-Instruct": "fireworks-ai",
-    "meta-llama/Llama-2-70b-chat": "fireworks-ai",
-    "deepseek-ai/DeepSeek-R1": "fireworks-ai",
-    "deepseek-ai/deepseek-v3-0324": "fireworks-ai",
-    "microsoft/phi-3-vision-128k-instruct": "fireworks-ai", // Added the Phi-3 Vision model
-    "mistralai/Mistral-Small-24B-Instruct-2501": "fireworks-ai",
-    "Qwen/Qwen2.5-Coder-32B-Instruct": "fireworks-ai",
+  const id = canonicalizeModelId(modelId);
 
-    // Image generation - Fireworks excels at SD 3.5 and FLUX models
-    "stabilityai/stable-diffusion-3.5": "fireworks-ai",
-    "black-forest-labs/FLUX.1-dev": "fireworks-ai",
-
-    // Replicate - excellent for many specialized and creative models
-    // Image generation - Replicate excels with various SD models and specialized image generators
-    "stability-ai/sdxl": "replicate",
-    "stability-ai/stable-diffusion": "replicate",
-    "prompthero/openjourney": "replicate",
-    "cjwbw/anything-v3-better-vae": "replicate",
-    "cjwbw/anything-v4.0": "replicate",
-    "cjwbw/portraitplus": "replicate",
-    "stability-ai/stable-diffusion-xl-base-1.0": "replicate",
-    "runwayml/stable-diffusion-v1-5": "replicate",
-    "timbrooks/instruct-pix2pix": "replicate", // Image editing
-
-    // Specialized LLMs & applications
-    "anthropic/claude-3-opus-20240229": "replicate",
-    "meta/llama-2-13b-chat": "replicate",
-    "meta/llama-2-7b-chat": "replicate",
-    "mistralai/mixtral-8x7b-instruct-v0.1": "replicate",
-    "01-ai/yi-34b-chat": "replicate",
-
-    // Multimodal
-    "yorickvp/llava-13b": "replicate",
-
-    // Text-to-speech
-    "suno/bark": "replicate",
-
-    // Translation models
-    "t5-base": "replicate",
-
-    // Image-to-text models (use HF Inference which supports this task)
-    "Salesforce/blip-image-captioning-base": "hf-inference",
-    "Salesforce/blip-image-captioning-large": "hf-inference",
-    "microsoft/git-large-coco": "hf-inference",
-    "nlpconnect/vit-gpt2-image-captioning": "hf-inference",
-  };
-
-  // Choose provider based on the task if no specific model mapping exists
-  if (!providerMap[modelId]) {
-    if (task === "textToImage" || task === "imageToImage") {
-      return "replicate"; // Replicate has more diverse image model options
-    } else if (task === "chatCompletion" || task === "textGeneration") {
-      return "fireworks-ai"; // Fireworks has optimized LLM infrastructure
-    } else if (task === "imageToText") {
-      return "hf-inference"; // Image captioning supported on HF Inference
-    }
+  const catalog = getCatalogEntry(id);
+  if (catalog && isProviderPolicy(catalog.provider)) {
+    return catalog.provider;
   }
 
-  // Default between the two providers based on model ID pattern matching
-  return (
-    providerMap[modelId] ||
-    (modelId.includes("stable-diffusion") ? "replicate" : "fireworks-ai")
-  );
+  if (PROVIDER_OVERRIDES[id]) {
+    return PROVIDER_OVERRIDES[id];
+  }
+
+  if (task === "textToImage" || task === "imageToImage") {
+    if (id.includes("stable-diffusion") || id.includes("sdxl")) {
+      return "fal-ai";
+    }
+    return "auto";
+  }
+  if (task === "imageToText") {
+    return "hf-inference";
+  }
+  // chatCompletion / textGeneration / unknown
+  return "auto";
 };
+
+export { canonicalizeModelId };

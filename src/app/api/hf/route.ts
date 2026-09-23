@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { inference, getBestProvider } from "@/utils/hf";
+import { inference, getBestProvider, canonicalizeModelId } from "@/utils/hf";
 import {
   FIXTURE_COMPLETION,
   FIXTURE_IMAGE_CAPTION,
@@ -7,6 +7,10 @@ import {
   fixturePngBuffer,
   hfFixturesEnabled,
 } from "@/utils/hf-fixtures";
+import {
+  DEFAULT_CHAT_MODEL,
+  DEFAULT_IMAGE_MODEL,
+} from "@/utils/models";
 import { captionWithLlava13bUrl } from "@/utils/replicate";
 import {
   chatSchema,
@@ -19,10 +23,35 @@ export const runtime = "nodejs";
 
 type HfRouteType = "comp" | "translation" | "imgtt" | "ttpng";
 
-type ApiErrorPayload = { error: unknown };
+type ApiErrorPayload = { error: string };
+
+/** Flatten HF / Zod / unknown errors into a clean user-facing string. */
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const msg = error.message || "Unknown error";
+    // HF client sometimes embeds JSON in the message
+    try {
+      const parsed = JSON.parse(msg) as { error?: unknown; message?: unknown };
+      if (typeof parsed.error === "string") return parsed.error;
+      if (typeof parsed.message === "string") return parsed.message;
+    } catch {
+      /* not JSON */
+    }
+    return msg;
+  }
+  if (typeof error === "string") return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "An unexpected error occurred";
+  }
+}
 
 function jsonError(status: number, error: unknown) {
-  return NextResponse.json<ApiErrorPayload>({ error }, { status });
+  return NextResponse.json<ApiErrorPayload>(
+    { error: formatErrorMessage(error) },
+    { status }
+  );
 }
 
 function getContentType(request: Request) {
@@ -52,7 +81,7 @@ async function handleCompletion(request: Request) {
   }
 
   const { message, max_tokens, model } = parsed.data;
-  const modelId = model || "deepseek-ai/deepseek-v3-0324";
+  const modelId = canonicalizeModelId(model || DEFAULT_CHAT_MODEL);
   const provider = getBestProvider(modelId, "chatCompletion");
 
   const out = await inference.chatCompletion({
@@ -78,7 +107,7 @@ async function handleTranslation(request: Request) {
   }
 
   const { text, targetLang, model } = parsed.data;
-  const modelId = model || "deepseek-ai/deepseek-v3-0324";
+  const modelId = canonicalizeModelId(model || DEFAULT_CHAT_MODEL);
   const provider = getBestProvider(modelId, "chatCompletion");
 
   const out = await inference.chatCompletion({
@@ -140,7 +169,7 @@ async function handleTextToPng(request: Request) {
   }
 
   const { prompt, negative_prompt, model } = parsed.data;
-  const modelId = model || "stabilityai/stable-diffusion-xl-base-1.0";
+  const modelId = canonicalizeModelId(model || DEFAULT_IMAGE_MODEL);
   const provider = getBestProvider(modelId, "textToImage");
 
   const out = await inference.textToImage(

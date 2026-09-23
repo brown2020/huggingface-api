@@ -1,97 +1,52 @@
 # Setting Up Inference Providers
 
-Hugging Face has recently changed their Inference API to use a provider-based system. This means that instead of HF hosting all models directly, they now route requests to third-party providers like Replicate, Together AI, fal.ai, Fireworks.ai, and others.
+Hugging Face routes Inference API calls through third-party **Inference Providers**
+(Fireworks, Replicate, fal.ai, DeepInfra, Novita, Featherless, etc.). Model ids must
+match Hub ids exactly (casing matters), and each model must have a live
+`inferenceProviderMapping` entry.
 
-## Using Fireworks.ai and Replicate Together
+## What broke (and the fix)
 
-If you have both Fireworks.ai and Replicate API keys, you can access a comprehensive range of models that complement each other's strengths. This dual-provider setup gives you the best of both worlds:
+Legacy default `deepseek-ai/deepseek-v3-0324` (wrong casing) + hardcoded
+`fireworks-ai` failed with:
 
-### Fireworks.ai Strengths
+> We have not been able to find inference provider information for model …
 
-#### Large Language Models (LLMs)
+**Fix:** catalog defaults to `deepseek-ai/DeepSeek-V3-0324` with provider `auto`
+(Hub currently serves it via DeepInfra / Featherless). Text-to-image defaults to
+`black-forest-labs/FLUX.1-dev` with `auto`. See `src/utils/models.ts`.
 
-Fireworks.ai excels at serving high-performance LLMs with optimized infrastructure:
+## Recommended defaults (2026-09)
 
-- **Llama Models**: Llama 3.1, Llama 3.2, Llama 4 (Maverick and Scout)
-- **DeepSeek Models**: DeepSeek-R1, DeepSeek-V3
-- **Mistral Models**: Mistral-7B-Instruct, Mistral-Small-24B
-- **Qwen Models**: Qwen2.5-Coder-32B-Instruct
+| Task | Model | Provider |
+|------|--------|----------|
+| Chat / translation | `deepseek-ai/DeepSeek-V3-0324` | `auto` |
+| Chat (reasoning) | `deepseek-ai/DeepSeek-R1` | `novita` / `auto` |
+| Chat (small) | `meta-llama/Llama-3.1-8B-Instruct` | `auto` |
+| Text-to-image | `black-forest-labs/FLUX.1-dev` | `auto` |
+| Text-to-image (SDXL) | `stabilityai/stable-diffusion-xl-base-1.0` | `fal-ai` |
 
-#### Image Generation Models
+Verify live mappings:
 
-Fireworks.ai has particular strengths with:
-
-- **Stable Diffusion 3.5**: Latest SD models with excellent quality
-- **FLUX.1**: Specialized high-quality image generation
-
-### Replicate Strengths
-
-#### Diverse Image Generation
-
-Replicate offers a wide variety of image generation models:
-
-- **Stable Diffusion Variants**: Many SD versions including specialized finetuned models
-- **Custom Models**: PortraitPlus, Openjourney, Anything-v4.0
-- **Image Editing**: Models like Instruct-Pix2Pix for image modification
-
-#### Specialized Media Models
-
-- **Text-to-Speech**: Suno/Bark for audio generation
-- **Multimodal**: LLaVA and other multimodal models
-- **Video Generation**: Text-to-video capabilities
-
-## Setting Up Both Providers
-
-1. **Create accounts with both providers**:
-
-   - Visit [fireworks.ai](https://fireworks.ai) and sign up
-   - Visit [replicate.com](https://replicate.com) and sign up
-   - Generate API keys from both platforms
-
-2. **Add your API keys to the environment**:
-   Add the following to your `.env.local` file:
-
-```
-HF_TOKEN=your_huggingface_token
-FIREWORKS_API_TOKEN=your_fireworks_token
-REPLICATE_API_TOKEN=your_replicate_token
+```bash
+curl -sS "https://huggingface.co/api/models/MODEL_ID?expand=inferenceProviderMapping"
 ```
 
-3. **Model Selection Logic**: The application now intelligently routes each model to the most appropriate provider:
-   - LLMs primarily use Fireworks.ai for performance
-   - Image generation models use Replicate for diversity or Fireworks for specific models
-   - Other specialized tasks use the provider with the best implementation
+Or browse https://huggingface.co/inference/models
 
-## How Model Selection Works
+## Env
 
-The application uses a sophisticated model-to-provider mapping strategy:
+- `HF_TOKEN` — required for live Inference Providers (server-only)
+- `REPLICATE_API_TOKEN` — LLaVA image captioning fallback
+- `HF_USE_FIXTURES=true` — CI / app-eval (no paid calls)
 
-1. **Explicit Mapping**: Many popular models are explicitly mapped to either Fireworks or Replicate based on which provider offers the best implementation.
+## Routing policy
 
-2. **Task-Based Fallback**: If a model isn't explicitly mapped, the application chooses based on the task type:
+1. UI catalog (`src/utils/models.ts`) — only models known to be provider-backed
+2. Explicit overrides in `getBestProvider` (`src/utils/hf.ts`)
+3. Task fallback → `auto` so HF picks a live provider (avoids stale Fireworks maps)
 
-   - For image generation: defaults to Replicate for its broader model selection
-   - For text generation/chat: defaults to Fireworks for its optimized LLM infrastructure
+## Links
 
-3. **Pattern Matching**: As a final fallback, Stable Diffusion models go to Replicate, while other models default to Fireworks
-
-## Pricing Considerations
-
-Both providers have different pricing models:
-
-**Fireworks.ai**:
-
-- LLMs range from $0.15/M tokens for smaller models to $3.00/M tokens for premium models
-- Image generation starts around $0.035 per image
-
-**Replicate**:
-
-- Per-model pricing varies widely
-- Many specialized models available at competitive rates
-- Generally more models to choose from across different tasks
-
-## Resources
-
-- [Fireworks.ai Model Library](https://fireworks.ai/models)
-- [Replicate Models](https://replicate.com/models)
-- [Hugging Face Inference Providers Documentation](https://huggingface.co/docs/inference-providers/en/)
+- [Inference Providers docs](https://huggingface.co/docs/inference-providers)
+- [Supported models](https://huggingface.co/inference/models)

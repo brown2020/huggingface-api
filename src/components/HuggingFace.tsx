@@ -2,6 +2,12 @@
 
 import { useRef, useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
+import {
+  CHAT_MODELS,
+  DEFAULT_CHAT_MODEL,
+  DEFAULT_IMAGE_MODEL,
+  IMAGE_MODELS,
+} from "@/utils/models";
 
 type TaskType = "" | "comp" | "translation" | "imgtt" | "ttpng";
 
@@ -16,6 +22,35 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+/** Parse API error bodies so the toast shows the HF message, not raw JSON. */
+function formatClientError(statusText: string, bodyText: string): string {
+  const trimmed = bodyText.trim();
+  if (!trimmed) return statusText || "Request failed";
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      error?: unknown;
+      message?: unknown;
+    };
+    if (typeof parsed.error === "string" && parsed.error.trim()) {
+      return parsed.error.trim();
+    }
+    if (
+      parsed.error &&
+      typeof parsed.error === "object" &&
+      "message" in (parsed.error as object) &&
+      typeof (parsed.error as { message: unknown }).message === "string"
+    ) {
+      return (parsed.error as { message: string }).message;
+    }
+    if (typeof parsed.message === "string" && parsed.message.trim()) {
+      return parsed.message.trim();
+    }
+  } catch {
+    /* plain text */
+  }
+  return trimmed.length > 500 ? `${trimmed.slice(0, 500)}…` : trimmed;
+}
+
 export default function HuggingFace() {
   const [type, setType] = useState<TaskType>("");
   const [message, setMessage] = useState("");
@@ -23,6 +58,8 @@ export default function HuggingFace() {
   const imageRef = useRef<File | null>(null);
   const [hasImage, setHasImage] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [chatModel, setChatModel] = useState(DEFAULT_CHAT_MODEL);
+  const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
   const [result, setResult] = useState<string | null>(null);
   const [imageResult, setImageResult] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -51,19 +88,19 @@ export default function HuggingFace() {
       requestInit = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, model: chatModel }),
       };
     } else if (type === "translation") {
       requestInit = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, model: chatModel }),
       };
     } else if (type === "ttpng") {
       requestInit = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, model: imageModel }),
       };
     } else {
       setError("Invalid type or missing required input");
@@ -76,7 +113,7 @@ export default function HuggingFace() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Error: ${response.statusText} - ${errorText}`);
+        throw new Error(formatClientError(response.statusText, errorText));
       }
 
       if (type === "ttpng") {
@@ -98,6 +135,9 @@ export default function HuggingFace() {
     }
   };
 
+  const showChatModel = type === "comp" || type === "translation";
+  const showImageModel = type === "ttpng";
+
   return (
     <div className="flex flex-col p-4 w-full">
       <h1 className="text-2xl font-bold mb-4 text-gray-900">
@@ -106,7 +146,8 @@ export default function HuggingFace() {
       <p className="mb-4 text-sm text-gray-700">
         Demo for chat completion, translation, image captioning, and text-to-image
         via Hugging Face Inference Providers (and Replicate for LLaVA captioning).
-        Prefer fixtures in CI — see AGENTS.md.
+        Model list is limited to Hub models with live provider mappings. Prefer
+        fixtures in CI — see AGENTS.md.
       </p>
       <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
         <div>
@@ -131,6 +172,50 @@ export default function HuggingFace() {
             <option value="ttpng">Text to PNG</option>
           </select>
         </div>
+        {showChatModel && (
+          <div>
+            <label
+              htmlFor="hf-chat-model"
+              className="block text-sm font-medium text-gray-800"
+            >
+              Model
+            </label>
+            <select
+              id="hf-chat-model"
+              value={chatModel}
+              onChange={(e) => setChatModel(e.target.value)}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white"
+            >
+              {CHAT_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {showImageModel && (
+          <div>
+            <label
+              htmlFor="hf-image-model"
+              className="block text-sm font-medium text-gray-800"
+            >
+              Model
+            </label>
+            <select
+              id="hf-image-model"
+              value={imageModel}
+              onChange={(e) => setImageModel(e.target.value)}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white"
+            >
+              {IMAGE_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {type === "comp" && (
           <div>
             <label

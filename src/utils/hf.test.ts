@@ -1,24 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { getBestProvider } from "./hf";
+import { getBestProvider, canonicalizeModelId } from "./hf";
 import {
   FIXTURE_COMPLETION,
   fixturePngBuffer,
   hfFixturesEnabled,
 } from "./hf-fixtures";
+import { DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from "./models";
 
 describe("getBestProvider (fixture-safe — no live HF)", () => {
-  it("maps deepseek chat to fireworks-ai", () => {
-    expect(getBestProvider("deepseek-ai/deepseek-v3-0324", "chatCompletion")).toBe(
-      "fireworks-ai"
+  it("canonicalizes legacy lowercase deepseek id", () => {
+    expect(canonicalizeModelId("deepseek-ai/deepseek-v3-0324")).toBe(
+      DEFAULT_CHAT_MODEL
     );
   });
 
-  it("defaults unknown image models to replicate", () => {
-    expect(getBestProvider("unknown/img-model", "textToImage")).toBe("replicate");
+  it("maps DeepSeek V3 chat to auto (live provider routing)", () => {
+    expect(getBestProvider(DEFAULT_CHAT_MODEL, "chatCompletion")).toBe("auto");
+    expect(
+      getBestProvider("deepseek-ai/deepseek-v3-0324", "chatCompletion")
+    ).toBe("auto");
   });
 
-  it("defaults unknown chat models to fireworks-ai", () => {
-    expect(getBestProvider("unknown/llm", "chatCompletion")).toBe("fireworks-ai");
+  it("maps SDXL text-to-image to fal-ai", () => {
+    expect(
+      getBestProvider(
+        "stabilityai/stable-diffusion-xl-base-1.0",
+        "textToImage"
+      )
+    ).toBe("fal-ai");
+  });
+
+  it("defaults unknown image models to auto", () => {
+    expect(getBestProvider("unknown/img-model", "textToImage")).toBe("auto");
+  });
+
+  it("defaults unknown chat models to auto", () => {
+    expect(getBestProvider("unknown/llm", "chatCompletion")).toBe("auto");
+  });
+
+  it("exposes FLUX default image model", () => {
+    expect(DEFAULT_IMAGE_MODEL).toBe("black-forest-labs/FLUX.1-dev");
+    expect(getBestProvider(DEFAULT_IMAGE_MODEL, "textToImage")).toBe("auto");
   });
 });
 
