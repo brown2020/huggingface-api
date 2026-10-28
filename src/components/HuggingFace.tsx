@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
+import { formatResultMessage } from "@/utils/format-result";
 import {
   CHAT_MODELS,
   DEFAULT_CHAT_MODEL,
@@ -130,8 +131,8 @@ export default function HuggingFace() {
         const dataUrl = await blobToDataUrl(blob);
         setImageResult(dataUrl);
       } else {
-        const data = await response.json();
-        setResult(JSON.stringify(data.message, null, 2));
+        const data = (await response.json()) as { message?: unknown };
+        setResult(formatResultMessage(data.message));
       }
     } catch (err: unknown) {
       if (err instanceof Error) {
