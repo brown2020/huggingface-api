@@ -62,8 +62,17 @@ export default function HuggingFace() {
   const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
   const [result, setResult] = useState<string | null>(null);
   const [imageResult, setImageResult] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  function withApiKey(init: RequestInit): RequestInit {
+    const key = apiKey.trim();
+    if (!key) return init;
+    const headers = new Headers(init.headers);
+    headers.set("x-hf-api-key", key);
+    return { ...init, headers };
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,7 +118,7 @@ export default function HuggingFace() {
     }
 
     try {
-      const response = await fetch(`/api/hf?type=${type}`, requestInit);
+      const response = await fetch(`/api/hf?type=${type}`, withApiKey(requestInit));
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -171,6 +180,23 @@ export default function HuggingFace() {
             <option value="imgtt">Image to Text</option>
             <option value="ttpng">Text to PNG</option>
           </select>
+        </div>
+        <div>
+          <label
+            htmlFor="hf-api-key"
+            className="block text-sm font-medium text-gray-800"
+          >
+            API key
+          </label>
+          <input
+            id="hf-api-key"
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            autoComplete="off"
+            className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white"
+            placeholder="Required for live calls when HF_API_SECRET is set"
+          />
         </div>
         {showChatModel && (
           <div>

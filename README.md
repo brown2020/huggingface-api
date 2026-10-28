@@ -61,8 +61,11 @@ Open [http://localhost:3000](http://localhost:3000).
 | `REPLICATE_API_TOKEN` | Replicate token for LLaVA captioning (server-only) | [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens) |
 | `REPLICATE_LLAVA_13B_VERSION` | Optional pinned LLaVA version hash | Replicate model page (optional) |
 | `HF_USE_FIXTURES` | When `true`, use fixtures instead of live providers | Set `true` for local/CI without burning credits |
+| `HF_API_SECRET` | Shared gate for `POST /api/hf`. When set, send it as `x-hf-api-key` or `Authorization: Bearer` (the demo form has an API key field). When unset, live calls return 503 and fixture mode still works. | Long random string you generate. Server-only |
 
 Never expose these as `NEXT_PUBLIC_*`. Never commit real values.
+
+`POST /api/hf` allowlists the catalog models, caps prompt length and `max_tokens`, limits body and image size, checks `Origin` when it is present, and rate-limits per client address. Live Hugging Face and Replicate calls run only when `HF_API_SECRET` is set and the request presents it.
 
 ## Scripts
 

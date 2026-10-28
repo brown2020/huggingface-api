@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guardApiRequest } from "@/utils/api-guard";
 import { inference, getBestProvider, canonicalizeModelId } from "@/utils/hf";
 import {
   FIXTURE_COMPLETION,
@@ -193,6 +194,9 @@ async function handleTextToPng(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const denied = guardApiRequest(request);
+  if (denied) return denied;
+
   const url = new URL(request.url);
   const typeParam = url.searchParams.get("type");
   const parsing = typeSchema.safeParse(typeParam);

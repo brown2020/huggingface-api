@@ -5,16 +5,16 @@
 | Layer | Modules | Notes |
 | --- | --- | --- |
 | Client UI | `src/components/HuggingFace.tsx`, `src/app/page.tsx` | Form → `fetch('/api/hf?type=...')` |
-| Route | `src/app/api/hf/route.ts` | Zod validation; fixture short-circuit; HF/Replicate calls |
+| Route | `src/app/api/hf/route.ts` | `guardApiRequest`, Zod allowlist, fixture short-circuit, HF/Replicate |
 | Providers | `src/utils/hf.ts`, `src/utils/replicate.ts` | Deferred clients; `server-only` |
 | Contracts | `src/utils/validation.ts` | Shared Zod schemas |
 | Fixtures | `src/utils/hf-fixtures.ts` | Labeled CI/eval responses |
 
 ## Trust boundary
 
-- Browser never receives `HF_TOKEN` / `REPLICATE_API_TOKEN`.
-- Authority stops at the route handler: invalid `type` → 400; GET → 405; missing tokens → 500 with safe message (live mode only).
-- Fixture mode never calls paid APIs.
+- Browser never receives `HF_TOKEN`, `REPLICATE_API_TOKEN`, or `HF_API_SECRET`. The demo form sends a key the operator types in; it is not bundled.
+- `guardApiRequest` runs before provider calls: rate limit, `Origin` (when present), `HF_API_SECRET` (required for live calls; fixtures allowed when the secret is unset), and `Content-Length`.
+- Invalid `type` → 400; disallowed model → 400; GET → 405. Fixture mode never calls paid APIs.
 
 ## Authority per write
 
