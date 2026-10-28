@@ -1,43 +1,47 @@
 # Hugging Face API Demo
 
-Small Next.js App Router demo for Hugging Face Inference Providers (chat completion, translation, text-to-image) plus Replicate LLaVA image captioning. No auth or payments — server routes call providers with tokens from `.env.local`.
+Next.js App Router demo for Hugging Face Inference Providers (chat completion, translation, text-to-image) and Replicate LLaVA image captioning. The browser never receives provider tokens. Live calls are off unless a server-only shared secret is configured.
 
 ## Features
 
-- **Text completion** — chat via `@huggingface/inference` with provider routing
-- **Translation** — same chat path with a translation prompt
-- **Image to text** — captioning via Replicate (LLaVA-13B)
-- **Text to image** — PNG generation via HF `textToImage`
-- **Fixtures mode** — `HF_USE_FIXTURES=true` returns labeled fixtures (no paid credits)
-- Zod-validated request bodies on `POST /api/hf`
+- **Completion** — chat via `@huggingface/inference`, catalog models only
+- **Translation** — same chat path; `targetLang` defaults to French
+- **Image to text** — Replicate LLaVA-13B captioning (polled until the prediction finishes)
+- **Text to image** — HF `textToImage`; response media type follows the image blob when it is PNG, JPEG, WebP, or GIF
+- **Fixtures** — `HF_USE_FIXTURES=true` returns labeled responses and does not call paid providers
+- **Request gate** — optional `HF_API_SECRET`, per-address rate limit, `Origin` check when that header is present, body and image limits
 
-See [`PROVIDER_SETUP.md`](./PROVIDER_SETUP.md) for current default model / provider mappings.
+Model ids and providers are listed in [`PROVIDER_SETUP.md`](./PROVIDER_SETUP.md). Behavior is specified in [`spec.md`](./spec.md). Follow-ups are in [`roadmap.md`](./roadmap.md).
 
 ## Tech stack
 
-| Layer | Tech |
-| --- | --- |
-| Framework | Next.js ^16.3.6 (App Router) |
-| UI | React ^19.3.0, Tailwind CSS ^4.3.3, react-spinners |
-| Language | TypeScript ^6.0.3 |
-| HF | `@huggingface/inference` ^4.13.15 |
-| Replicate | `replicate` ^1.4.0 |
-| Validation | Zod ^4.3.6 |
-| Tests | Vitest ^5.0.1, ESLint 10 |
+Locked versions in `package-lock.json`:
 
-Requires Node.js `>= 20.9.0` (CI uses 22).
+| Layer | Package |
+| --- | --- |
+| Framework | Next.js 16.4.3 (App Router) |
+| UI | React 19.3.1, React DOM 19.3.1, Tailwind CSS 4.3.3, react-spinners 0.17.1 |
+| Language | TypeScript 7.0.2 (`tsc` via `@typescript/native`); TypeScript 6.0.3 stays installed as `typescript` so ESLint can load the compiler API |
+| Lint | ESLint 10.13.0, `@typescript-eslint` 8.72.1, `@next/eslint-plugin-next` 16.4.3 |
+| HF | `@huggingface/inference` 4.13.32 |
+| Replicate | `replicate` 1.4.0 |
+| Validation | Zod 4.6.7 |
+| Tests | Vitest 5.0.5, Vite 8.3.5 |
+
+Requires Node.js `>= 20.9.0`. CI uses Node 22.
 
 ## Project structure
 
 ```
 src/
-  app/
-    page.tsx           # Renders HuggingFace demo UI
-    api/hf/route.ts    # Unified POST handler (comp | translation | imgtt | ttpng)
+  app/page.tsx              # Home page
+  app/api/hf/route.ts       # POST /api/hf
   components/HuggingFace.tsx
-  utils/               # hf.ts, replicate.ts, models.ts, validation, fixtures
+  utils/                    # providers, catalog, validation, fixtures, request gate
 .github/workflows/ci.yml
-.env.example
+.env.example                # names only; copy to .env.local
+spec.md
+roadmap.md
 ```
 
 ## Getting started
@@ -46,26 +50,27 @@ src/
 git clone https://github.com/brown2020/huggingface-api.git
 cd huggingface-api
 cp .env.example .env.local
-# Set HF_TOKEN and REPLICATE_API_TOKEN for live calls, or HF_USE_FIXTURES=true
 npm ci
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
+Leave `HF_USE_FIXTURES` set so the demo does not call paid providers. For live calls, set the server-only names in the table below in `.env.local` (never in the client bundle) and type the shared secret into the API key field.
+
 ## Environment variables
 
-| Name | Purpose | Where to get it |
-| --- | --- | --- |
-| `HF_TOKEN` | Hugging Face Inference API token (server-only) | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
-| `REPLICATE_API_TOKEN` | Replicate token for LLaVA captioning (server-only) | [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens) |
-| `REPLICATE_LLAVA_13B_VERSION` | Optional pinned LLaVA version hash | Replicate model page (optional) |
-| `HF_USE_FIXTURES` | When `true`, use fixtures instead of live providers | Set `true` for local/CI without burning credits |
-| `HF_API_SECRET` | Shared gate for `POST /api/hf`. When set, send it as `x-hf-api-key` or `Authorization: Bearer` (the demo form has an API key field). When unset, live calls return 503 and fixture mode still works. | Long random string you generate. Server-only |
+Names only. Do not commit real values. Do not prefix these with `NEXT_PUBLIC_`.
 
-Never expose these as `NEXT_PUBLIC_*`. Never commit real values.
+| Name | Role |
+| --- | --- |
+| `HF_TOKEN` | Hugging Face token used by the server for Inference Providers. Read at runtime. |
+| `REPLICATE_API_TOKEN` | Replicate token used by the server for LLaVA captioning. Read at runtime. |
+| `REPLICATE_LLAVA_13B_VERSION` | Optional pinned LLaVA version id. When unset, the server asks Replicate for the latest version. |
+| `HF_USE_FIXTURES` | When `true`, handlers return labeled fixtures and do not call providers. |
+| `HF_API_SECRET` | When set, `POST /api/hf` requires header `x-hf-api-key` or `Authorization: Bearer`. When unset, live calls return 503 and fixture mode still works. |
 
-`POST /api/hf` allowlists the catalog models, caps prompt length and `max_tokens`, limits body and image size, checks `Origin` when it is present, and rate-limits per client address. Live Hugging Face and Replicate calls run only when `HF_API_SECRET` is set and the request presents it.
+`HF_TOKEN` is captured when the server module loads. `REPLICATE_API_TOKEN` is read on each caption call. Neither is required to build or to run tests.
 
 ## Scripts
 
@@ -73,24 +78,23 @@ Never expose these as `NEXT_PUBLIC_*`. Never commit real values.
 | --- | --- |
 | `npm run dev` | Dev server |
 | `npm run build` | Production build |
-| `npm start` | Serve production build |
+| `npm start` | Serve the production build |
 | `npm run lint` | ESLint (`--max-warnings=0`) |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run typecheck` | `tsc --noEmit` (TypeScript 7) |
 | `npm test` | Vitest |
-| `npm run validate` | lint + typecheck + test + build |
+| `npm run validate` | lint, typecheck, test, and build |
 
 ## Testing and CI
 
-- Unit tests cover HF helpers and Zod validation; set `HF_USE_FIXTURES=true` in CI.
-- `.github/workflows/ci.yml` on `dev` / `main`: lint → typecheck → test → build (fixtures enabled; no inline secrets).
+`.github/workflows/ci.yml` runs on `dev` and `main`: `npm ci --ignore-scripts`, lint, typecheck, test, and build. Test and build set `HF_USE_FIXTURES` and do not inline tokens.
 
 ## Deployment
 
-Any Next.js host (e.g. Vercel). Configure server-only secrets in the host dashboard. Prefer fixtures in preview/CI.
+Host it as a Next.js app. Put server-only variables in the host's secret store. Prefer fixtures on preview and CI. This repo does not change host settings.
 
 ## Contributing
 
-Work on `dev`. Prefer fixtures over live paid calls unless authorized. See [`AGENTS.md`](./AGENTS.md).
+Work on `dev`. Do not call paid providers unless that spend is authorized. See [`AGENTS.md`](./AGENTS.md).
 
 ## License
 
