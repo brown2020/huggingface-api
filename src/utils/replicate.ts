@@ -50,6 +50,12 @@ async function getLatestLlava13bVersionId(): Promise<string> {
   return cachedLlava13bVersionIdPromise;
 }
 
+/**
+ * Poll until the prediction is terminal.
+ * Block mode ignores `interval` and treats a still-running prediction as done.
+ */
+export const LLAVA_WAIT = { mode: "poll", interval: 1000 } as const;
+
 export async function captionWithLlava13bUrl(input: CaptionImageInput) {
   const versionId =
     process.env.REPLICATE_LLAVA_13B_VERSION ||
@@ -63,8 +69,11 @@ export async function captionWithLlava13bUrl(input: CaptionImageInput) {
       prompt: input.prompt ?? "Describe the image",
       question: input.prompt ?? "Describe the image",
     },
-    wait: { mode: "block", interval: 1000 },
+    wait: LLAVA_WAIT,
   })) as unknown;
 
+  if (output == null || output === "") {
+    throw new Error("Image captioning returned no output");
+  }
   return output;
 }
