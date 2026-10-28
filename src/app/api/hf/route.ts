@@ -12,6 +12,11 @@ import {
   DEFAULT_CHAT_MODEL,
   DEFAULT_IMAGE_MODEL,
 } from "@/utils/models";
+import { HttpError } from "@/utils/http-error";
+import {
+  imageResponseContentType,
+  requireImageFile,
+} from "@/utils/image-file";
 import { captionWithLlava13bUrl } from "@/utils/replicate";
 import {
   chatSchema,
@@ -62,11 +67,20 @@ function getContentType(request: Request) {
 async function readBodyAsObject(request: Request) {
   const contentType = getContentType(request);
   if (contentType.includes("application/json")) {
-    return (await request.json()) as unknown;
+    try {
+      return (await request.json()) as unknown;
+    } catch {
+      throw new HttpError(400, "Invalid JSON body");
+    }
   }
   // Backwards compatibility for older clients using multipart for all requests.
-  const formData = await request.formData();
-  return Object.fromEntries(formData.entries());
+  try {
+    const formData = await request.formData();
+    return Object.fromEntries(formData.entries());
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(400, "Invalid form body");
+  }
 }
 
 async function handleCompletion(request: Request) {
@@ -129,9 +143,14 @@ async function handleTranslation(request: Request) {
 }
 
 async function handleImageToText(request: Request) {
-  const formData = await request.formData();
-  const imageFile = formData.get("image") as File | null;
-  if (!imageFile) return jsonError(400, "Image is required");
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    throw new HttpError(400, "Invalid form body");
+  }
+  const imageFile = requireImageFile(formData.get("image"));
+  const mediaType = imageResponseContentType(imageFile.type);
 
   if (hfFixturesEnabled()) {
     return NextResponse.json({
@@ -143,7 +162,7 @@ async function handleImageToText(request: Request) {
 
   const arrayBuffer = await imageFile.arrayBuffer();
   const base64 = Buffer.from(arrayBuffer).toString("base64");
-  const dataUrl = `data:${imageFile.type};base64,${base64}`;
+  const dataUrl = `data:${mediaType};base64,${base64}`;
 
   const output = await captionWithLlava13bUrl({ imageUrl: dataUrl });
   return NextResponse.json({
@@ -187,7 +206,7 @@ async function handleTextToPng(request: Request) {
   return new Response(new Uint8Array(buffer), {
     status: 200,
     headers: {
-      "Content-Type": "image/png",
+      "Content-Type": imageResponseContentType(out.type),
       "Content-Disposition": "inline; filename=generated-image.png",
     },
   });
@@ -215,14 +234,11 @@ export async function POST(request: Request) {
 
     return await handlers[type](request);
   } catch (error: unknown) {
-    if (error instanceof Error) {
-      console.error(error);
-      // Never echo secrets; message is still safe for missing-token cases.
-      return jsonError(500, error.message || "Unknown error");
-    } else {
-      console.error("Unexpected error:", error);
-      return jsonError(500, "An unexpected error occurred");
+    if (error instanceof HttpError) {
+      return jsonError(error.status, error.message);
     }
+    console.error(error);
+    return jsonError(500, "An unexpected error occurred");
   }
 }
 

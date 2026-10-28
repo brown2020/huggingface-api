@@ -27,6 +27,7 @@ describe("POST /api/hf denial and fixtures", () => {
   const prevFixture = process.env.HF_USE_FIXTURES;
   const prevToken = process.env.HF_TOKEN;
   const prevSecret = process.env.HF_API_SECRET;
+  const prevReplicate = process.env.REPLICATE_API_TOKEN;
 
   beforeEach(() => {
     resetApiGuardForTests();
@@ -43,6 +44,8 @@ describe("POST /api/hf denial and fixtures", () => {
     else process.env.HF_TOKEN = prevToken;
     if (prevSecret === undefined) delete process.env.HF_API_SECRET;
     else process.env.HF_API_SECRET = prevSecret;
+    if (prevReplicate === undefined) delete process.env.REPLICATE_API_TOKEN;
+    else process.env.REPLICATE_API_TOKEN = prevReplicate;
   });
 
   it("rejects invalid type parameter (400)", async () => {
@@ -168,6 +171,71 @@ describe("POST /api/hf denial and fixtures", () => {
       })
     );
     expect(res.status).toBe(413);
+  });
+
+  it("rejects invalid JSON with a fixed 400 message", async () => {
+    const res = await POST(
+      new Request("http://localhost/api/hf?type=comp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{",
+      })
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("Invalid JSON body");
+  });
+
+  it("rejects a non-file image field (400)", async () => {
+    const form = new FormData();
+    form.set("image", "not-a-file");
+    const res = await POST(
+      new Request("http://localhost/api/hf?type=imgtt", { method: "POST", body: form })
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("Image file is required");
+  });
+
+  it("rejects a non-image upload (400)", async () => {
+    const form = new FormData();
+    form.set("image", new File([new Uint8Array([1])], "notes.txt", { type: "text/plain" }));
+    const res = await POST(
+      new Request("http://localhost/api/hf?type=imgtt", { method: "POST", body: form })
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("Unsupported image type");
+  });
+
+  it("accepts a png upload in fixture mode", async () => {
+    const form = new FormData();
+    form.set("image", new File([new Uint8Array([1, 2, 3])], "dot.png", { type: "image/png" }));
+    const res = await POST(
+      new Request("http://localhost/api/hf?type=imgtt", { method: "POST", body: form })
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fixture).toBe(true);
+  });
+
+  it("hides internal provider errors on live failure (500)", async () => {
+    process.env.HF_USE_FIXTURES = "false";
+    process.env.HF_API_SECRET = TEST_API_SECRET;
+    delete process.env.REPLICATE_API_TOKEN;
+    const form = new FormData();
+    form.set("image", new File([new Uint8Array([1, 2, 3])], "dot.png", { type: "image/png" }));
+    const res = await POST(
+      new Request("http://localhost/api/hf?type=imgtt", {
+        method: "POST",
+        headers: { "x-hf-api-key": TEST_API_SECRET },
+        body: form,
+      })
+    );
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe("An unexpected error occurred");
+    expect(JSON.stringify(body)).not.toMatch(/TOKEN|arrayBuffer|not set/i);
   });
 
   it("rate-limits repeated calls (429)", async () => {
