@@ -21,6 +21,12 @@ describe("getBestProvider (fixture-safe — no live HF)", () => {
     ).toBe("auto");
   });
 
+  it("routes DeepSeek R1 through the catalog auto provider", () => {
+    expect(getBestProvider("deepseek-ai/DeepSeek-R1", "chatCompletion")).toBe(
+      "auto"
+    );
+  });
+
   it("maps SDXL text-to-image to fal-ai", () => {
     expect(
       getBestProvider(

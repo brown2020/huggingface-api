@@ -21,7 +21,7 @@ Legacy default `deepseek-ai/deepseek-v3-0324` (wrong casing) + hardcoded
 | Task | Model | Provider |
 |------|--------|----------|
 | Chat / translation | `deepseek-ai/DeepSeek-V3-0324` | `auto` |
-| Chat (reasoning) | `deepseek-ai/DeepSeek-R1` | `novita` / `auto` |
+| Chat (reasoning) | `deepseek-ai/DeepSeek-R1` | `auto` |
 | Chat (small) | `meta-llama/Llama-3.1-8B-Instruct` | `auto` |
 | Text-to-image | `black-forest-labs/FLUX.1-dev` | `auto` |
 | Text-to-image (SDXL) | `stabilityai/stable-diffusion-xl-base-1.0` | `fal-ai` |

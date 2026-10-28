@@ -37,7 +37,6 @@ export const inference = new Proxy({} as HfInference, {
 const PROVIDER_OVERRIDES: Record<string, InferenceProviderOrPolicy> = {
   // Chat — live as of 2026-09 Hub inferenceProviderMapping
   "deepseek-ai/DeepSeek-V3-0324": "auto",
-  "deepseek-ai/DeepSeek-R1": "novita",
   "deepseek-ai/DeepSeek-V3": "deepinfra",
   "meta-llama/Llama-3.1-8B-Instruct": "auto",
   "meta-llama/Llama-3.2-90B-Vision-Instruct": "auto",
