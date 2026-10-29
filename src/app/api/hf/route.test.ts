@@ -11,8 +11,6 @@ import {
 import {
   HF_AUTH_MESSAGE,
   HF_CREDITS_MESSAGE,
-  HF_RATE_MESSAGE,
-  HF_TIMEOUT_MESSAGE,
   HF_UNAVAILABLE_MESSAGE,
 } from "@/utils/hf-errors";
 import {
@@ -368,10 +366,23 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
   });
 
-  it("returns 401 JSON when the server token is rejected", async () => {
+  it("tries Hugging Face, then returns the sample when the token is rejected", async () => {
     hfMocks.chatCompletion.mockRejectedValue(providerError(401, "Invalid credentials"));
     const res = await liveJson("comp", { message: "hello" });
-    expect(res.status).toBe(401);
+    expect(hfMocks.chatCompletion).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fixture).toBe(true);
+    expect(body.demoData).toBe(true);
+    expect(body.notice).toBeUndefined();
+    expect(String(body.message)).toContain("[fixture]");
+    expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
+  });
+
+  it("returns JSON for a 403 that is not a credit or quota failure", async () => {
+    hfMocks.chatCompletion.mockRejectedValue(providerError(403, "Forbidden"));
+    const res = await liveJson("comp", { message: "hello" });
+    expect(res.status).toBe(403);
     const body = await res.json();
     expect(body).toEqual({ error: HF_AUTH_MESSAGE });
     expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
@@ -390,32 +401,49 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     expect(JSON.stringify(body)).not.toContain("exceeded quota");
   });
 
-  it("returns 429 JSON when Hugging Face rate limits the call", async () => {
+  it("returns the sample when Hugging Face rate limits, returns 503, or times out", async () => {
     hfMocks.chatCompletion.mockRejectedValue(providerError(429, "Too Many Requests"));
-    const res = await liveJson("comp", { message: "hello" });
-    expect(res.status).toBe(429);
-    const body = await res.json();
-    expect(body).toEqual({ error: HF_RATE_MESSAGE });
-    expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
-  });
+    const limited = await liveJson("comp", { message: "hello" });
+    expect(limited.status).toBe(200);
+    const limitedBody = await limited.json();
+    expect(limitedBody.demoData).toBe(true);
+    expect(limitedBody.notice).toBeUndefined();
+    expect(JSON.stringify(limitedBody)).not.toContain(PLANTED_TOKEN);
 
-  it("returns 503 JSON when Hugging Face is unavailable", async () => {
     hfMocks.chatCompletion.mockRejectedValue(providerError(503, "unavailable"));
-    const down = await liveJson("comp", { message: "hello" });
-    expect(down.status).toBe(503);
-    expect(await down.json()).toEqual({ error: HF_UNAVAILABLE_MESSAGE });
-  });
+    const down = await liveJson("comp", { message: "hello again" });
+    expect(down.status).toBe(200);
+    const downBody = await down.json();
+    expect(downBody.demoData).toBe(true);
+    expect(JSON.stringify(downBody)).not.toContain("unavailable");
 
-  it("returns 504 JSON when Hugging Face times out", async () => {
     const timeout = new Error("The operation was aborted due to timeout");
     timeout.name = "TimeoutError";
     hfMocks.chatCompletion.mockRejectedValue(timeout);
-    const timed = await liveJson("comp", { message: "hello again" });
-    expect(timed.status).toBe(504);
-    const body = await timed.json();
-    expect(body).toEqual({ error: HF_TIMEOUT_MESSAGE });
-    expect(JSON.stringify(body)).not.toContain("aborted");
-    expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
+    const timed = await liveJson("comp", { message: "hello once more" });
+    expect(timed.status).toBe(200);
+    const timedBody = await timed.json();
+    expect(timedBody.demoData).toBe(true);
+    expect(JSON.stringify(timedBody)).not.toContain("aborted");
+  });
+
+  it("keeps a non-503 upstream failure as JSON", async () => {
+    hfMocks.chatCompletion.mockRejectedValue(providerError(502, "bad gateway"));
+    const res = await liveJson("comp", { message: "hello" });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: HF_UNAVAILABLE_MESSAGE });
+  });
+
+  it("calls Hugging Face when fixture mode is off", async () => {
+    delete process.env.HF_USE_FIXTURES;
+    hfMocks.chatCompletion.mockResolvedValue({
+      choices: [{ message: { content: "live answer" } }],
+    });
+    const res = await liveJson("comp", { message: "hello" });
+    expect(hfMocks.chatCompletion).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ message: "live answer" });
   });
 
   it("hides an unclassified provider body", async () => {

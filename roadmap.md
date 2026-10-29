@@ -4,7 +4,7 @@ Punchlist after the maintenance pass. No open GitHub issues were listed for this
 
 ## Next steps
 
-1. Decide whether a public deploy is allowed to spend Hugging Face and Replicate credits. The account has no inference credits and is not being upgraded, so live HF credit failures return saved samples, a “Demo data” badge, and “The Hugging Face demo is out of credits right now.” Real model output still needs credits. If spend is approved later, set `HF_API_SECRET`, `HF_TOKEN`, and `REPLICATE_API_TOKEN` in the host. Leave `HF_USE_FIXTURES` unset only for that environment. If spend is not approved, keep fixtures on.
+1. Decide whether a public deploy is allowed to spend Hugging Face and Replicate credits. The account has no inference credits and is not being upgraded, so a live call still goes to Hugging Face first. Credits, quota, 401, 429, 503, and timeouts then return saved samples and a “Demo data” badge. Credit and quota failures also show “The Hugging Face demo is out of credits right now.” Real model output still needs credits. If spend is approved later, set `HF_API_SECRET`, `HF_TOKEN`, and `REPLICATE_API_TOKEN` in the host. Leave `HF_USE_FIXTURES` unset only for that environment. If spend is not approved, keep fixtures on.
 2. Confirm the host function time limit, then set `maxDuration` on `POST /api/hf` to a value that plan allows. FLUX and LLaVA often outlive short defaults, and a killed function can still leave a provider job running.
 3. With spend authorized, run one live text-to-image call on `black-forest-labs/FLUX.1-dev` and see whether the always-on `negative_prompt` (`blurry` when omitted) is accepted.
 4. Add a target-language control. The API already accepts `targetLang` and defaults to French; the form never sends it.

@@ -3,7 +3,7 @@ import {
   HfInference,
   type InferenceProviderOrPolicy,
 } from "@huggingface/inference";
-import { classifyUpstreamFailure } from "@/utils/hf-errors";
+import { HfCallError, classifyUpstreamFailure } from "@/utils/hf-errors";
 import { HttpError } from "@/utils/http-error";
 import {
   canonicalizeModelId,
@@ -150,7 +150,7 @@ export async function withHfErrors<T>(run: () => Promise<T>): Promise<T> {
       status: failure?.status ?? null,
     });
     if (failure) {
-      throw new HttpError(failure.status, failure.message);
+      throw new HfCallError(failure);
     }
     throw new HttpError(500, "An unexpected error occurred");
   }

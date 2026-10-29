@@ -79,13 +79,13 @@ describe("classifyUpstreamFailure", () => {
     expect(failure?.message).toBe(HF_CREDITS_MESSAGE);
   });
 
-  it("maps 401 and 403 to an invalid server token", () => {
+  it("maps 401 to a fixture fallback and leaves a plain 403 as an error", () => {
     const unauthorized = classifyUpstreamFailure(providerError(401, "Unauthorized"));
     expect(unauthorized).toMatchObject({
       kind: "auth",
       status: 401,
       message: HF_AUTH_MESSAGE,
-      fallbackToFixtures: false,
+      fallbackToFixtures: true,
     });
     const forbidden = classifyUpstreamFailure(providerError(403, "Forbidden"));
     expect(forbidden).toMatchObject({
@@ -98,27 +98,28 @@ describe("classifyUpstreamFailure", () => {
     expect(JSON.stringify(forbidden)).not.toContain("Bearer");
   });
 
-  it("maps 429 without falling back to fixtures", () => {
+  it("maps 429 to a fixture fallback", () => {
     const failure = classifyUpstreamFailure(providerError(429, "slow down"));
     expect(failure).toEqual({
       kind: "rate",
       status: 429,
       message: HF_RATE_MESSAGE,
-      fallbackToFixtures: false,
+      fallbackToFixtures: true,
     });
   });
 
-  it("maps HTTP 503 to unavailable and other 5xx the same way", () => {
+  it("maps HTTP 503 to a fixture fallback and leaves other 5xx as errors", () => {
     expect(classifyUpstreamFailure(providerError(503, "down"))).toEqual({
       kind: "unavailable",
       status: 503,
       message: HF_UNAVAILABLE_MESSAGE,
-      fallbackToFixtures: false,
+      fallbackToFixtures: true,
     });
     for (const status of [500, 502]) {
       const failure = classifyUpstreamFailure(providerError(status, "boom"));
       expect(failure?.kind).toBe("unavailable");
       expect(failure?.status).toBe(503);
+      expect(failure?.fallbackToFixtures).toBe(false);
     }
   });
 
@@ -129,6 +130,7 @@ describe("classifyUpstreamFailure", () => {
       kind: "timeout",
       status: 504,
       message: HF_TIMEOUT_MESSAGE,
+      fallbackToFixtures: true,
     });
 
     const timedOut = new Error("connect timed out");

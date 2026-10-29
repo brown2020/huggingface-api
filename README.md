@@ -8,8 +8,8 @@ Next.js App Router demo for Hugging Face Inference Providers (chat completion, t
 - **Translation** — same chat path; `targetLang` defaults to French
 - **Image to text** — Replicate LLaVA-13B captioning (polled until the prediction finishes)
 - **Text to image** — HF `textToImage`; response media type follows the image blob when it is PNG, JPEG, WebP, or GIF
-- **Fixtures** — `HF_USE_FIXTURES=true` returns labeled responses, does not call paid providers, and the page shows a small “Demo data” badge
-- **Out of credits** — HTTP 402, a body that mentions credits, or an exceeded quota returns those same samples with the badge and the notice “The Hugging Face demo is out of credits right now.” HTTP 401, 429, and 503 return that status with a fixed JSON `error`. Timeouts return HTTP 504. Provider bodies and tokens are not sent to the browser.
+- **Live first** — with `HF_USE_FIXTURES` unset, chat, translation, and text-to-image call Hugging Face. Credits, quota, HTTP 401, 429, 503, and timeouts return the saved sample and a small “Demo data” badge. A credit or quota failure also shows “The Hugging Face demo is out of credits right now.”
+- **Fixtures** — `HF_USE_FIXTURES=true` skips the provider and returns those samples with the same badge. The flag is off unless set.
 - **Request gate** — optional `HF_API_SECRET`, per-address rate limit, `Origin` check when that header is present, body and image limits
 
 Model ids and providers are listed in [`PROVIDER_SETUP.md`](./PROVIDER_SETUP.md). Behavior is specified in [`spec.md`](./spec.md). Follow-ups are in [`roadmap.md`](./roadmap.md).
@@ -68,7 +68,7 @@ Names only. Do not commit real values. Do not prefix these with `NEXT_PUBLIC_`.
 | `HF_TOKEN` | Hugging Face token used by the server for Inference Providers. Read at runtime. |
 | `REPLICATE_API_TOKEN` | Replicate token used by the server for LLaVA captioning. Read at runtime. |
 | `REPLICATE_LLAVA_13B_VERSION` | Optional pinned LLaVA version id. When unset, the server asks Replicate for the latest version. |
-| `HF_USE_FIXTURES` | When `true`, handlers return labeled fixtures and do not call providers. A live no-credits response also returns those fixtures when the saved samples are present. |
+| `HF_USE_FIXTURES` | Off by default. When `true`, handlers return labeled fixtures and do not call providers. |
 | `HF_API_SECRET` | When set, `POST /api/hf` requires header `x-hf-api-key` or `Authorization: Bearer`. When unset, live calls return 503 and fixture mode still works. |
 
 `HF_TOKEN` is captured when the server module loads. `REPLICATE_API_TOKEN` is read on each caption call. Neither is required to build or to run tests.

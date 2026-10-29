@@ -32,9 +32,25 @@ export type UpstreamFailure = {
   /** Status used when the route does not fall back to fixtures. */
   status: number;
   message: string;
-  /** Credit failures can return saved fixtures instead of this status. */
+  /**
+   * When saved samples exist, the route returns them instead of this status.
+   * True for credits, quota, 401, 429, 503, and timeouts.
+   */
   fallbackToFixtures: boolean;
 };
+
+/** Safe provider failure. Carries the fixed message only, never the raw body. */
+export class HfCallError extends HttpError {
+  readonly kind: UpstreamFailureKind;
+  readonly fallbackToFixtures: boolean;
+
+  constructor(failure: UpstreamFailure) {
+    super(failure.status, failure.message);
+    this.name = "HfCallError";
+    this.kind = failure.kind;
+    this.fallbackToFixtures = failure.fallbackToFixtures;
+  }
+}
 
 const CREDIT_PATTERN = /\bcredits\b|exceeded quota/i;
 
@@ -76,10 +92,19 @@ export function classifyUpstreamFailure(error: unknown): UpstreamFailure | null 
     };
   }
 
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     return {
       kind: "auth",
-      status,
+      status: 401,
+      message: HF_AUTH_MESSAGE,
+      fallbackToFixtures: true,
+    };
+  }
+
+  if (status === 403) {
+    return {
+      kind: "auth",
+      status: 403,
       message: HF_AUTH_MESSAGE,
       fallbackToFixtures: false,
     };
@@ -90,7 +115,7 @@ export function classifyUpstreamFailure(error: unknown): UpstreamFailure | null 
       kind: "rate",
       status: 429,
       message: HF_RATE_MESSAGE,
-      fallbackToFixtures: false,
+      fallbackToFixtures: true,
     };
   }
 
@@ -99,7 +124,7 @@ export function classifyUpstreamFailure(error: unknown): UpstreamFailure | null 
       kind: "unavailable",
       status: 503,
       message: HF_UNAVAILABLE_MESSAGE,
-      fallbackToFixtures: false,
+      fallbackToFixtures: true,
     };
   }
 
@@ -108,7 +133,7 @@ export function classifyUpstreamFailure(error: unknown): UpstreamFailure | null 
       kind: "timeout",
       status: 504,
       message: HF_TIMEOUT_MESSAGE,
-      fallbackToFixtures: false,
+      fallbackToFixtures: true,
     };
   }
 

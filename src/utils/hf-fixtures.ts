@@ -1,6 +1,6 @@
 /**
  * Labeled fixtures for Hugging Face / Replicate demo responses.
- * Used when HF_USE_FIXTURES=true (CI / app-eval) to avoid burning paid credits.
+ * Used when HF_USE_FIXTURES=true (off by default) and when a live HF call fails closed.
  * Fixtures cannot prove live provider quality, latency, or credit metering.
  */
 

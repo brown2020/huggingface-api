@@ -15,11 +15,12 @@ import {
 } from "@/utils/models";
 import {
   DEMO_DATA_HEADER,
-  HF_CREDITS_MESSAGE,
+  HfCallError,
   NOTICE_HEADER,
   classifyUpstreamFailure,
   headerSafeReason,
   scrubPublicErrorText,
+  type UpstreamFailure,
 } from "@/utils/hf-errors";
 import { HttpError } from "@/utils/http-error";
 import {
@@ -99,6 +100,19 @@ function sampleResponse(type: HfRouteType, notice?: string): Response {
       : {}),
     ...(safeNotice ? { notice: safeNotice } : {}),
   });
+}
+
+function failureFrom(error: unknown): UpstreamFailure | null {
+  if (error instanceof HfCallError) {
+    return {
+      kind: error.kind,
+      status: error.status,
+      message: error.message,
+      fallbackToFixtures: error.fallbackToFixtures,
+    };
+  }
+  if (error instanceof HttpError) return null;
+  return classifyUpstreamFailure(error);
 }
 
 function logUpstreamFailure(
@@ -265,28 +279,17 @@ export async function POST(request: Request) {
 
     return await handlers[type](request);
   } catch (error: unknown) {
-    const fromClient =
-      error instanceof HttpError && error.status === 402
-        ? {
-            kind: "credits" as const,
-            status: 402,
-            message: HF_CREDITS_MESSAGE,
-            fallbackToFixtures: true,
-          }
-        : error instanceof HttpError
-          ? null
-          : classifyUpstreamFailure(error);
+    const fromClient = failureFrom(error);
 
     if (!(error instanceof HttpError)) {
       logUpstreamFailure(error, fromClient);
     }
 
-    if (
-      fromClient?.kind === "credits" &&
-      fromClient.fallbackToFixtures &&
-      savedFixturesExist()
-    ) {
-      return sampleResponse(type, fromClient.message);
+    if (fromClient?.fallbackToFixtures && savedFixturesExist()) {
+      return sampleResponse(
+        type,
+        fromClient.kind === "credits" ? fromClient.message : undefined
+      );
     }
     if (fromClient) {
       return NextResponse.json(

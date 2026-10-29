@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpError } from "./http-error";
+import { HfCallError } from "./hf-errors";
 import { getBestProvider, canonicalizeModelId, withHfErrors } from "./hf";
 import { HF_CREDITS_MESSAGE, HF_TIMEOUT_MESSAGE } from "./hf-errors";
 import {
@@ -91,8 +91,10 @@ describe("withHfErrors", () => {
       httpRequest: { headers: { Authorization: `Bearer ${token}` } },
     });
     await expect(withHfErrors(() => Promise.reject(error))).rejects.toMatchObject({
+      name: "HfCallError",
       status: 402,
       message: HF_CREDITS_MESSAGE,
+      fallbackToFixtures: true,
     });
     expect(logged.mock.calls.flat().join(" ")).not.toContain(token);
     logged.mockRestore();
@@ -101,12 +103,13 @@ describe("withHfErrors", () => {
   it("maps a timeout to 504", async () => {
     const timeout = new Error("timed out");
     timeout.name = "TimeoutError";
-    await expect(withHfErrors(() => Promise.reject(timeout))).rejects.toEqual(
-      expect.any(HttpError)
+    await expect(withHfErrors(() => Promise.reject(timeout))).rejects.toBeInstanceOf(
+      HfCallError
     );
     await expect(withHfErrors(() => Promise.reject(timeout))).rejects.toMatchObject({
       status: 504,
       message: HF_TIMEOUT_MESSAGE,
+      fallbackToFixtures: true,
     });
   });
 });

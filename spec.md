@@ -25,7 +25,7 @@ A single-page demo. The operator picks a task, optionally types a shared API key
 
 Fixture mode (`HF_USE_FIXTURES=true`) returns labeled text or a 1×1 PNG and sets `fixture: true`, `demoData: true`, or `X-HF-Fixture` and `X-HF-Demo-Data`. It does not call Hugging Face or Replicate. The page shows a small “Demo data” badge.
 
-If a live call fails because credits are exhausted (HTTP 402, a body mentioning credits, or “exceeded quota”) and those saved samples exist, the route returns the same fixture with HTTP 200, `demoData: true`, and `notice` set to `The Hugging Face demo is out of credits right now.` Text-to-image sends that sentence in `X-HF-Notice`. The page shows the badge, that sentence, and the sample.
+If fixtures are off, the handler calls Hugging Face. A failure for credits, an exceeded quota, HTTP 401, HTTP 429, HTTP 503, or a timeout returns that same fixture with HTTP 200 and `demoData: true` when the saved samples exist. A credit or quota failure also sets `notice` to `The Hugging Face demo is out of credits right now.` Text-to-image sends that sentence in `X-HF-Notice`. The page shows the badge and the sample. Other provider failures stay JSON errors.
 
 ## Models
 
@@ -65,16 +65,16 @@ The shared-secret check in `guardApiRequest` is unchanged and runs before any pr
 | Status | When |
 | --- | --- |
 | 400 | Bad `type`, schema failure, bad image, bad body |
-| 401 | Shared secret required and missing or wrong, or Hugging Face returned 401. The provider case body is `{ "error": "The server token is invalid." }` |
+| 401 | Shared secret required and missing or wrong. A Hugging Face 401 uses the fixture row when samples exist; otherwise `{ "error": "The server token is invalid." }` |
 | 403 | `Origin` host does not match the request host, or Hugging Face returned 403 without a credit or quota phrase. The provider case uses the same invalid-token sentence. |
 | 405 | `GET /api/hf` |
 | 413 | `Content-Length` over 5 MiB |
 | 402 | Hugging Face reported no credits and the saved samples are missing. Body is `{ "error": "The Hugging Face demo is out of credits right now." }` |
-| 429 | App rate limit, or Hugging Face returned 429. The Hugging Face case body is `{ "error": "Hugging Face is rate limiting requests. Try again shortly." }` |
-| 503 | Live mode while `HF_API_SECRET` is unset (`Live inference is disabled`), or Hugging Face returned 503 or another 5xx. The provider case body is `{ "error": "Hugging Face is unavailable right now." }` |
-| 504 | The Hugging Face call timed out. Body is `{ "error": "Hugging Face timed out. Try again shortly." }` |
+| 429 | App rate limit. A Hugging Face 429 uses the fixture row when samples exist. |
+| 503 | Live mode while `HF_API_SECRET` is unset (`Live inference is disabled`), or Hugging Face returned a 5xx other than 503. Body for that provider case is `{ "error": "Hugging Face is unavailable right now." }` A Hugging Face 503 uses the fixture row when samples exist. |
+| 504 | A Hugging Face timeout uses the fixture row when samples exist. Otherwise `{ "error": "Hugging Face timed out. Try again shortly." }` |
 | 500 | Any other failure. Body is `{ "error": "An unexpected error occurred" }`. |
-| 200 fixture | `HF_USE_FIXTURES=true`, or a credit/quota failure while saved samples exist. Credit fallback also sets `notice` to `The Hugging Face demo is out of credits right now.` |
+| 200 fixture | `HF_USE_FIXTURES=true`, or a live credit, quota, 401, 429, 503, or timeout failure while saved samples exist. Credit and quota fallbacks also set `notice` to `The Hugging Face demo is out of credits right now.` |
 
 A credit or quota phrase wins over HTTP 401 or 403, so that failure is not described as a bad token. Classification reads the status and a short slice of the provider message or body, then discards that text. `src/utils/hf.ts` turns the failure into a safe `HttpError` before the route answers. The JSON body and image headers contain only the fixed sentence. The server log records the error name, failure kind, and status. None of those include the provider body, `Authorization`, or the token. The form renders a JSON `error` string in the alert and does not render a non-JSON body.
 
