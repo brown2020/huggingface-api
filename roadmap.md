@@ -29,6 +29,10 @@ Punchlist after the maintenance pass. No open GitHub issues were listed for this
 
 None listed on GitHub at the time of this pass.
 
+## Deployment
+
+Vercel project linked Oct 28, 2026 (team ignitechannel, project huggingface-api). Dev previews are at `huggingface-api-git-dev-ignitechannel.vercel.app`. The default domain is `huggingface-api-taupe.vercel.app`. Live inference needs `HF_TOKEN`, `REPLICATE_API_TOKEN`, and `HF_API_SECRET` set in Vercel; they are not set yet.
+
 ## Needs a decision
 
 - Whether preview and production should stay on fixtures.
