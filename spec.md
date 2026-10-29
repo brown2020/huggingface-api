@@ -4,7 +4,7 @@ Current behavior of the Hugging Face API demo as built on `dev`. This describes 
 
 ## Product
 
-A single-page demo. The operator picks a task, optionally types a shared API key, and submits. Results stay in the browser. There is no database, no user accounts, and no email/password auth.
+A single-page demo. The operator picks a task, types the demo password when the server has one, and submits. Results stay in the browser. There is no database and no user accounts. The demo password is the shared `HF_API_SECRET`, not an email/password account.
 
 ## Pages
 
@@ -41,10 +41,10 @@ Image captioning does not take a model id. It always uses Replicate LLaVA-13B.
 
 1. **Rate limit** — 30 requests per 60 seconds per client address (`x-forwarded-for`, else `x-real-ip`, else `unknown`). Over the limit: `429` and `Retry-After`. The counter is in memory for that server process.
 2. **Origin** — if `Origin` is present, its host must match `x-forwarded-host` or `Host`. Otherwise `403`. Requests with no `Origin` are not rejected here.
-3. **Shared secret** — if `HF_API_SECRET` is set, the request must send the same value in `x-hf-api-key` or `Authorization: Bearer`. Comparison is a SHA-256 digest checked with `timingSafeEqual`. Missing or wrong key: `401`. If `HF_API_SECRET` is unset and fixtures are on, the request continues. If it is unset and fixtures are off: `503` `Live inference is disabled` and no provider is called.
+3. **Demo password** — if `HF_API_SECRET` is set, the request must send the same value in `x-hf-api-key` or `Authorization: Bearer`. Comparison is a SHA-256 digest checked with `timingSafeEqual`. Missing or wrong password: `401` `{ "error": "Enter the demo password to run live requests" }`. The form labels that field “Demo password” and shows the same sentence as helper text. If `HF_API_SECRET` is unset and fixtures are on, the request continues. If it is unset and fixtures are off: `503` `Live inference is disabled` and no provider is called. A correct password still calls Hugging Face first; credits, quota, 401 from Hugging Face, 429, 503, and timeouts fall back to saved samples and the Demo data badge.
 4. **Body size** — `Content-Length` above 5 MiB: `413`.
 
-The demo form keeps the API key in component state and sends `x-hf-api-key` only when the field is non-empty. The key is not written into the bundle.
+The demo form keeps the password in component state and sends `x-hf-api-key` only when the field is non-empty. The password is not written into the bundle.
 
 ## Validation
 

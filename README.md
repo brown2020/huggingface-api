@@ -57,7 +57,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Leave `HF_USE_FIXTURES` set so the demo does not call paid providers. For live calls, set the server-only names in the table below in `.env.local` (never in the client bundle) and type the shared secret into the API key field.
+Leave `HF_USE_FIXTURES` unset to try Hugging Face first. For live calls, set the server-only names in the table below in `.env.local` (never in the client bundle) and type `HF_API_SECRET` into the Demo password field. A missing or wrong password returns `Enter the demo password to run live requests`.
 
 ## Environment variables
 
@@ -69,7 +69,7 @@ Names only. Do not commit real values. Do not prefix these with `NEXT_PUBLIC_`.
 | `REPLICATE_API_TOKEN` | Replicate token used by the server for LLaVA captioning. Read at runtime. |
 | `REPLICATE_LLAVA_13B_VERSION` | Optional pinned LLaVA version id. When unset, the server asks Replicate for the latest version. |
 | `HF_USE_FIXTURES` | Off by default. When `true`, handlers return labeled fixtures and do not call providers. |
-| `HF_API_SECRET` | When set, `POST /api/hf` requires header `x-hf-api-key` or `Authorization: Bearer`. When unset, live calls return 503 and fixture mode still works. |
+| `HF_API_SECRET` | Demo password. When set, `POST /api/hf` requires header `x-hf-api-key` or `Authorization: Bearer`. A missing or wrong value returns 401 `Enter the demo password to run live requests` and does not call Hugging Face. When unset, live calls return 503 and fixture mode still works. |
 
 `HF_TOKEN` is captured when the server module loads. `REPLICATE_API_TOKEN` is read on each caption call. Neither is required to build or to run tests.
 

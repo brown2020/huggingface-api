@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { DEMO_PASSWORD_MESSAGE } from "./demo-password";
 import {
   guardApiRequest,
   resetApiGuardForTests,
@@ -15,6 +16,36 @@ describe("guardApiRequest", () => {
     else process.env.HF_USE_FIXTURES = prevFixture;
     if (prevSecret === undefined) delete process.env.HF_API_SECRET;
     else process.env.HF_API_SECRET = prevSecret;
+  });
+
+  it("asks for the demo password when the shared secret is missing or wrong", async () => {
+    resetApiGuardForTests();
+    process.env.HF_USE_FIXTURES = "false";
+    process.env.HF_API_SECRET = "test-only-hf-api-secret";
+    const missing = guardApiRequest(
+      new Request("http://localhost/api/hf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      })
+    );
+    expect(missing?.status).toBe(401);
+    expect(await missing?.json()).toEqual({ error: DEMO_PASSWORD_MESSAGE });
+
+    const wrong = guardApiRequest(
+      new Request("http://localhost/api/hf", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-hf-api-key": "not-the-secret",
+        },
+        body: "{}",
+      })
+    );
+    expect(wrong?.status).toBe(401);
+    const wrongBody = await wrong?.json();
+    expect(wrongBody).toEqual({ error: DEMO_PASSWORD_MESSAGE });
+    expect(JSON.stringify(wrongBody)).not.toMatch(/Unauthorized/);
   });
 
   it("allows fixture mode without a shared secret", () => {

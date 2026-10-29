@@ -8,6 +8,7 @@ import {
   demoPresentationFromPayload,
   formatClientError,
 } from "@/utils/client-error";
+import { DEMO_PASSWORD_MESSAGE } from "@/utils/demo-password";
 import { formatResultMessage } from "@/utils/format-result";
 import {
   CHAT_MODELS,
@@ -171,20 +172,25 @@ export default function HuggingFace() {
         </div>
         <div>
           <label
-            htmlFor="hf-api-key"
+            htmlFor="hf-demo-password"
             className="block text-sm font-medium text-gray-800"
           >
-            API key
+            Demo password
           </label>
           <input
-            id="hf-api-key"
+            id="hf-demo-password"
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             autoComplete="off"
+            aria-describedby="hf-demo-password-help"
             className="mt-1 block w-full p-2 border border-gray-300 rounded-md text-gray-900 bg-white"
-            placeholder="Required for live calls when HF_API_SECRET is set"
+            placeholder="Demo password"
           />
+          <p id="hf-demo-password-help" className="mt-1 text-sm text-gray-700">
+            {DEMO_PASSWORD_MESSAGE}. This is the shared HF_API_SECRET, not a
+            Hugging Face token.
+          </p>
         </div>
         {showChatModel && (
           <div>
@@ -342,7 +348,13 @@ export default function HuggingFace() {
       )}
       {error && (
         <div className="mt-4 text-red-700" role="alert">
-          <strong>Error:</strong> {error}
+          {error === DEMO_PASSWORD_MESSAGE ? (
+            error
+          ) : (
+            <>
+              <strong>Error:</strong> {error}
+            </>
+          )}
         </div>
       )}
       {result && (

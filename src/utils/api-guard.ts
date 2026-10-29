@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { DEMO_PASSWORD_MESSAGE } from "@/utils/demo-password";
 import { hfFixturesEnabled } from "@/utils/hf-fixtures";
 
 /** Shared header for `HF_API_SECRET`. Also accepts `Authorization: Bearer`. */
@@ -94,7 +95,7 @@ function authorize(request: Request): Response | null {
   }
   const supplied = suppliedApiKey(request);
   if (!supplied || !tokensMatch(supplied, secret)) {
-    return jsonError(401, "Unauthorized");
+    return jsonError(401, DEMO_PASSWORD_MESSAGE);
   }
   return null;
 }

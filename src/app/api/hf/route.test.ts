@@ -17,6 +17,7 @@ import {
   FIXTURE_COMPLETION,
   FIXTURE_TRANSLATION,
 } from "@/utils/hf-fixtures";
+import { DEMO_PASSWORD_MESSAGE } from "@/utils/demo-password";
 import { DEFAULT_CHAT_MODEL } from "@/utils/models";
 import * as replicateMod from "@/utils/replicate";
 import { GET, POST } from "./route";
@@ -161,11 +162,13 @@ describe("POST /api/hf denial and fixtures", () => {
     process.env.HF_API_SECRET = TEST_API_SECRET;
     const missing = await postJson("comp", { message: "hello" });
     expect(missing.status).toBe(401);
+    expect(await missing.json()).toEqual({ error: DEMO_PASSWORD_MESSAGE });
 
     const wrong = await postJson("comp", { message: "hello" }, {
       "x-hf-api-key": "not-the-secret",
     });
     expect(wrong.status).toBe(401);
+    expect(await wrong.json()).toEqual({ error: DEMO_PASSWORD_MESSAGE });
 
     const bearer = await postJson("comp", { message: "hello" }, {
       Authorization: `Bearer ${TEST_API_SECRET}`,
