@@ -2,6 +2,12 @@
 
 import { useRef, useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
+import { DemoModeBanner } from "@/components/demo-mode-banner";
+import {
+  demoReasonFromHeaders,
+  demoReasonFromPayload,
+  formatClientError,
+} from "@/utils/client-error";
 import { formatResultMessage } from "@/utils/format-result";
 import {
   CHAT_MODELS,
@@ -23,35 +29,6 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-/** Parse API error bodies so the toast shows the HF message, not raw JSON. */
-function formatClientError(statusText: string, bodyText: string): string {
-  const trimmed = bodyText.trim();
-  if (!trimmed) return statusText || "Request failed";
-  try {
-    const parsed = JSON.parse(trimmed) as {
-      error?: unknown;
-      message?: unknown;
-    };
-    if (typeof parsed.error === "string" && parsed.error.trim()) {
-      return parsed.error.trim();
-    }
-    if (
-      parsed.error &&
-      typeof parsed.error === "object" &&
-      "message" in (parsed.error as object) &&
-      typeof (parsed.error as { message: unknown }).message === "string"
-    ) {
-      return (parsed.error as { message: string }).message;
-    }
-    if (typeof parsed.message === "string" && parsed.message.trim()) {
-      return parsed.message.trim();
-    }
-  } catch {
-    /* plain text */
-  }
-  return trimmed.length > 500 ? `${trimmed.slice(0, 500)}…` : trimmed;
-}
-
 export default function HuggingFace() {
   const [type, setType] = useState<TaskType>("");
   const [message, setMessage] = useState("");
@@ -65,6 +42,7 @@ export default function HuggingFace() {
   const [imageResult, setImageResult] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState("");
+  const [demoReason, setDemoReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   function withApiKey(init: RequestInit): RequestInit {
@@ -80,6 +58,7 @@ export default function HuggingFace() {
     setError("");
     setResult(null);
     setImageResult(null);
+    setDemoReason(null);
     setLoading(true);
 
     let requestInit: RequestInit | null = null;
@@ -127,11 +106,13 @@ export default function HuggingFace() {
       }
 
       if (type === "ttpng") {
+        setDemoReason(demoReasonFromHeaders(response.headers));
         const blob = await response.blob();
         const dataUrl = await blobToDataUrl(blob);
         setImageResult(dataUrl);
       } else {
         const data = (await response.json()) as { message?: unknown };
+        setDemoReason(demoReasonFromPayload(data));
         setResult(formatResultMessage(data.message));
       }
     } catch (err: unknown) {
@@ -343,6 +324,7 @@ export default function HuggingFace() {
           <span className="sr-only">Loading</span>
         </div>
       )}
+      {demoReason && <DemoModeBanner reason={demoReason} />}
       {error && (
         <div className="mt-4 text-red-700" role="alert">
           <strong>Error:</strong> {error}

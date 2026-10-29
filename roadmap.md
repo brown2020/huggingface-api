@@ -4,7 +4,7 @@ Punchlist after the maintenance pass. No open GitHub issues were listed for this
 
 ## Next steps
 
-1. Decide whether a public deploy is allowed to spend Hugging Face and Replicate credits. If yes, set `HF_API_SECRET`, `HF_TOKEN`, and `REPLICATE_API_TOKEN` in the host. Leave `HF_USE_FIXTURES` unset only for that environment. If no, keep fixtures on.
+1. Decide whether a public deploy is allowed to spend Hugging Face and Replicate credits. The Hugging Face account currently has no inference credits, so live HF calls fail closed into sample fixtures and a “Demo mode: sample results” banner (invalid token does the same). Real model output still needs credits. If spend is approved, set `HF_API_SECRET`, `HF_TOKEN`, and `REPLICATE_API_TOKEN` in the host. Leave `HF_USE_FIXTURES` unset only for that environment. If spend is not approved, keep fixtures on.
 2. Confirm the host function time limit, then set `maxDuration` on `POST /api/hf` to a value that plan allows. FLUX and LLaVA often outlive short defaults, and a killed function can still leave a provider job running.
 3. With spend authorized, run one live text-to-image call on `black-forest-labs/FLUX.1-dev` and see whether the always-on `negative_prompt` (`blurry` when omitted) is accepted.
 4. Add a target-language control. The API already accepts `targetLang` and defaults to French; the form never sends it.
@@ -24,6 +24,7 @@ Punchlist after the maintenance pass. No open GitHub issues were listed for this
 - **Caption and image calls have no app-level abort** tied to the platform timeout.
 - **A double-click can start two submits** before React disables the button.
 - **`docs/budget.md` points at a script that is not in the repo.**
+- **Hugging Face credit exhaustion no longer becomes a raw 500.** Auth and no-credit failures return the labeled fixture and the demo banner. HTTP 429 and upstream 5xx or timeouts return a fixed JSON error. The provider body is not shown.
 
 ## Open issues
 
@@ -31,7 +32,7 @@ None listed on GitHub at the time of this pass.
 
 ## Deployment
 
-Vercel project linked Oct 28, 2026 (team ignitechannel, project huggingface-api). Dev previews are at `huggingface-api-git-dev-ignitechannel.vercel.app`. The default domain is `huggingface-api-taupe.vercel.app`. Live inference needs `HF_TOKEN`, `REPLICATE_API_TOKEN`, and `HF_API_SECRET` set in Vercel; they are not set yet.
+Vercel project linked Oct 28, 2026 (team ignitechannel, project huggingface-api). Dev previews are at `huggingface-api-git-dev-ignitechannel.vercel.app`. The default domain is `huggingface-api-taupe.vercel.app`. Live inference needs `HF_TOKEN`, `REPLICATE_API_TOKEN`, and `HF_API_SECRET` set in Vercel; they are not set yet. Until the Hugging Face account has inference credits, chat, translation, and text-to-image on a live token fall back to sample results instead of returning a provider 500.
 
 ## Needs a decision
 

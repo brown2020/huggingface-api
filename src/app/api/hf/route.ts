@@ -12,6 +12,13 @@ import {
   DEFAULT_CHAT_MODEL,
   DEFAULT_IMAGE_MODEL,
 } from "@/utils/models";
+import {
+  DEMO_MODE_HEADER,
+  DEMO_REASON_HEADER,
+  classifyUpstreamFailure,
+  headerSafeReason,
+  scrubPublicErrorText,
+} from "@/utils/hf-errors";
 import { HttpError } from "@/utils/http-error";
 import {
   imageResponseContentType,
@@ -55,9 +62,51 @@ function formatErrorMessage(error: unknown): string {
 
 function jsonError(status: number, error: unknown) {
   return NextResponse.json<ApiErrorPayload>(
-    { error: formatErrorMessage(error) },
+    { error: scrubPublicErrorText(formatErrorMessage(error)) },
     { status }
   );
+}
+
+function demoFixtureResponse(type: HfRouteType, reason: string): Response {
+  const safeReason = headerSafeReason(reason);
+  if (type === "ttpng") {
+    const buffer = fixturePngBuffer();
+    return new Response(new Uint8Array(buffer), {
+      status: 200,
+      headers: {
+        "Content-Type": "image/png",
+        "Content-Disposition": "inline; filename=fixture-image.png",
+        "X-HF-Fixture": "true",
+        [DEMO_MODE_HEADER]: "true",
+        [DEMO_REASON_HEADER]: safeReason,
+      },
+    });
+  }
+
+  const message =
+    type === "translation"
+      ? FIXTURE_TRANSLATION
+      : type === "imgtt"
+        ? FIXTURE_IMAGE_CAPTION
+        : FIXTURE_COMPLETION;
+
+  return NextResponse.json({
+    message,
+    fixture: true,
+    demoMode: true,
+    demoReason: safeReason,
+  });
+}
+
+function logUpstreamFailure(
+  error: unknown,
+  failure: { kind: string; status: number } | null
+) {
+  console.error("hf upstream failure", {
+    name: error instanceof Error ? error.name : "non-error",
+    kind: failure?.kind ?? "unknown",
+    status: failure?.status ?? null,
+  });
 }
 
 function getContentType(request: Request) {
@@ -237,8 +286,18 @@ export async function POST(request: Request) {
     if (error instanceof HttpError) {
       return jsonError(error.status, error.message);
     }
-    console.error(error);
-    return jsonError(500, "An unexpected error occurred");
+    const failure = classifyUpstreamFailure(error);
+    logUpstreamFailure(error, failure);
+    if (failure?.fallbackToFixtures) {
+      return demoFixtureResponse(type, failure.message);
+    }
+    if (failure) {
+      return NextResponse.json({ error: failure.message }, { status: failure.status });
+    }
+    return NextResponse.json(
+      { error: "An unexpected error occurred" },
+      { status: 500 }
+    );
   }
 }
 

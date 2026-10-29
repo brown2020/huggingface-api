@@ -9,6 +9,7 @@ Next.js App Router demo for Hugging Face Inference Providers (chat completion, t
 - **Image to text** — Replicate LLaVA-13B captioning (polled until the prediction finishes)
 - **Text to image** — HF `textToImage`; response media type follows the image blob when it is PNG, JPEG, WebP, or GIF
 - **Fixtures** — `HF_USE_FIXTURES=true` returns labeled responses and does not call paid providers
+- **Credit and token fallback** — a live Hugging Face response that reports no credits (or HTTP 402) or rejects the server token (HTTP 401 or 403) returns those same fixtures with HTTP 200 and a demo-mode reason. The page shows a banner, “Demo mode: sample results”, plus that reason. Rate limits return HTTP 429, and upstream 5xx or timeouts return HTTP 503, each with a fixed JSON `error` string. Provider bodies and tokens are not sent to the browser.
 - **Request gate** — optional `HF_API_SECRET`, per-address rate limit, `Origin` check when that header is present, body and image limits
 
 Model ids and providers are listed in [`PROVIDER_SETUP.md`](./PROVIDER_SETUP.md). Behavior is specified in [`spec.md`](./spec.md). Follow-ups are in [`roadmap.md`](./roadmap.md).
@@ -67,7 +68,7 @@ Names only. Do not commit real values. Do not prefix these with `NEXT_PUBLIC_`.
 | `HF_TOKEN` | Hugging Face token used by the server for Inference Providers. Read at runtime. |
 | `REPLICATE_API_TOKEN` | Replicate token used by the server for LLaVA captioning. Read at runtime. |
 | `REPLICATE_LLAVA_13B_VERSION` | Optional pinned LLaVA version id. When unset, the server asks Replicate for the latest version. |
-| `HF_USE_FIXTURES` | When `true`, handlers return labeled fixtures and do not call providers. |
+| `HF_USE_FIXTURES` | When `true`, handlers return labeled fixtures and do not call providers. Live auth or credit failures also return those fixtures even when this is unset. |
 | `HF_API_SECRET` | When set, `POST /api/hf` requires header `x-hf-api-key` or `Authorization: Bearer`. When unset, live calls return 503 and fixture mode still works. |
 
 `HF_TOKEN` is captured when the server module loads. `REPLICATE_API_TOKEN` is read on each caption call. Neither is required to build or to run tests.

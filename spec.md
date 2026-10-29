@@ -23,7 +23,9 @@ A single-page demo. The operator picks a task, optionally types a shared API key
 | `imgtt` | multipart field `image` | Replicate `yorickvp/llava-13b`, polled to a terminal prediction | `{ "message": caption }` |
 | `ttpng` | JSON `prompt`, optional `negative_prompt`, optional `model` | HF `textToImage` | image bytes |
 
-Fixture mode (`HF_USE_FIXTURES=true`) returns labeled text or a 1×1 PNG and sets `fixture: true` or `X-HF-Fixture: true`. It does not call Hugging Face or Replicate.
+Fixture mode (`HF_USE_FIXTURES=true`) returns labeled text or a 1×1 PNG and sets `fixture: true` or `X-HF-Fixture: true`. It does not call Hugging Face or Replicate. That response does not set demo-mode fields.
+
+If fixtures are off and a live call fails because credits are exhausted or the server token is rejected, the route still returns that fixture with HTTP 200. JSON adds `demoMode: true` and `demoReason`. Text-to-image adds `X-HF-Demo-Mode: true` and `X-HF-Demo-Reason`. The page shows a banner titled “Demo mode: sample results” and the reason. `HF_USE_FIXTURES` stays unset; the fallback is per response.
 
 ## Models
 
@@ -58,6 +60,8 @@ Invalid JSON or a non-multipart body on a JSON task returns `400` with `Invalid 
 
 ## Errors
 
+The shared-secret check in `guardApiRequest` is unchanged and runs before any provider call.
+
 | Status | When |
 | --- | --- |
 | 400 | Bad `type`, schema failure, bad image, bad body |
@@ -65,9 +69,12 @@ Invalid JSON or a non-multipart body on a JSON task returns `400` with `Invalid 
 | 403 | `Origin` host does not match the request host |
 | 405 | `GET /api/hf` |
 | 413 | `Content-Length` over 5 MiB |
-| 429 | Rate limit |
-| 503 | Live mode while `HF_API_SECRET` is unset |
-| 500 | Any other failure. Body is `{ "error": "An unexpected error occurred" }`. The server logs the underlying error and does not return it. |
+| 429 | App rate limit, or Hugging Face returned 429. The Hugging Face case body is `{ "error": "Hugging Face is rate limiting requests. Try again shortly." }` |
+| 503 | Live mode while `HF_API_SECRET` is unset (`Live inference is disabled`), or Hugging Face returned 408 or 5xx, or the call timed out. The provider case body is `{ "error": "Hugging Face is unavailable right now." }` |
+| 500 | Any other failure. Body is `{ "error": "An unexpected error occurred" }`. |
+| 200 fixture | Upstream HTTP 402, a no-credits message such as “You have no remaining credits”, or upstream HTTP 401/403 that is not a credit failure. `demoReason` is `The demo's Hugging Face credits are used up.` or `The server token is invalid.` |
+
+A credit phrase wins over HTTP 401 or 403, so a credit failure is not described as a bad token. Classification reads the status and a short slice of the provider message or body, then discards that text. The JSON body and image headers contain only the fixed sentence. The server log records the error name, failure kind, and status. None of those include the provider body, `Authorization`, or the token. The form renders a JSON `error` string in the alert and does not render a non-JSON body.
 
 ## Runtime
 
