@@ -1,12 +1,8 @@
-/** Visible notice when a live auth or credit failure returned sample output. */
-export function DemoModeBanner({ reason }: { reason: string }) {
+/** Small label when the result is a saved sample. */
+export function DemoDataBadge() {
   return (
-    <div
-      className="mt-4 rounded-md border border-amber-400 bg-amber-50 p-4 text-amber-950"
-      role="status"
-    >
-      <p className="font-semibold">Demo mode: sample results</p>
-      <p className="mt-1 text-sm">{reason}</p>
-    </div>
+    <span className="inline-flex items-center rounded-full border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-950">
+      Demo data
+    </span>
   );
 }

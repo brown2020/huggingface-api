@@ -3,6 +3,8 @@ import {
   HfInference,
   type InferenceProviderOrPolicy,
 } from "@huggingface/inference";
+import { classifyUpstreamFailure } from "@/utils/hf-errors";
+import { HttpError } from "@/utils/http-error";
 import {
   canonicalizeModelId,
   getCatalogEntry,
@@ -132,3 +134,36 @@ export const getBestProvider = (
 };
 
 export { canonicalizeModelId };
+
+/**
+ * Run one Hugging Face call and replace provider failures with a safe HttpError.
+ * The original error is not logged and is not rethrown.
+ */
+export async function withHfErrors<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    const failure = classifyUpstreamFailure(error);
+    console.error("hf upstream failure", {
+      name: error instanceof Error ? error.name : "non-error",
+      kind: failure?.kind ?? "unknown",
+      status: failure?.status ?? null,
+    });
+    if (failure) {
+      throw new HttpError(failure.status, failure.message);
+    }
+    throw new HttpError(500, "An unexpected error occurred");
+  }
+}
+
+export function hfChatCompletion(
+  args: Parameters<HfInference["chatCompletion"]>[0]
+) {
+  return withHfErrors(() => inference.chatCompletion(args));
+}
+
+export function hfTextToImage(
+  args: Parameters<HfInference["textToImage"]>[0]
+) {
+  return withHfErrors(() => inference.textToImage(args, { outputType: "blob" }));
+}

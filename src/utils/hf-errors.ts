@@ -1,7 +1,8 @@
 import { HttpError } from "@/utils/http-error";
 
-/** Shown when Hugging Face reports no credits or HTTP 402. */
-export const HF_CREDITS_MESSAGE = "The demo's Hugging Face credits are used up.";
+/** Shown when Hugging Face reports no credits, HTTP 402, or an exceeded quota. */
+export const HF_CREDITS_MESSAGE =
+  "The Hugging Face demo is out of credits right now.";
 
 /** Shown when Hugging Face rejects the server token (HTTP 401 or 403). */
 export const HF_AUTH_MESSAGE = "The server token is invalid.";
@@ -10,25 +11,32 @@ export const HF_AUTH_MESSAGE = "The server token is invalid.";
 export const HF_RATE_MESSAGE =
   "Hugging Face is rate limiting requests. Try again shortly.";
 
-/** Shown for upstream 5xx responses and timeouts. */
+/** Shown when Hugging Face returns HTTP 503 or another 5xx. */
 export const HF_UNAVAILABLE_MESSAGE = "Hugging Face is unavailable right now.";
 
-export const DEMO_MODE_HEADER = "X-HF-Demo-Mode";
-export const DEMO_REASON_HEADER = "X-HF-Demo-Reason";
+/** Shown when the provider call times out. */
+export const HF_TIMEOUT_MESSAGE = "Hugging Face timed out. Try again shortly.";
 
-export type UpstreamFailureKind = "credits" | "auth" | "rate" | "unavailable";
+export const DEMO_DATA_HEADER = "X-HF-Demo-Data";
+export const NOTICE_HEADER = "X-HF-Notice";
+
+export type UpstreamFailureKind =
+  | "credits"
+  | "auth"
+  | "rate"
+  | "unavailable"
+  | "timeout";
 
 export type UpstreamFailure = {
   kind: UpstreamFailureKind;
   /** Status used when the route does not fall back to fixtures. */
   status: number;
   message: string;
-  /** Auth and credit failures return labeled fixtures instead of this status. */
+  /** Credit failures can return saved fixtures instead of this status. */
   fallbackToFixtures: boolean;
 };
 
-const CREDIT_PATTERN =
-  /no remaining credits|insufficient credits|out of credits|payment required/i;
+const CREDIT_PATTERN = /\bcredits\b|exceeded quota/i;
 
 const TIMEOUT_MESSAGE = /\btimeout\b|\btimed out\b/i;
 
@@ -73,7 +81,7 @@ export function classifyUpstreamFailure(error: unknown): UpstreamFailure | null 
       kind: "auth",
       status,
       message: HF_AUTH_MESSAGE,
-      fallbackToFixtures: true,
+      fallbackToFixtures: false,
     };
   }
 
@@ -86,7 +94,25 @@ export function classifyUpstreamFailure(error: unknown): UpstreamFailure | null 
     };
   }
 
-  if ((status !== undefined && (status === 408 || status >= 500)) || isTimeout(error)) {
+  if (status === 503) {
+    return {
+      kind: "unavailable",
+      status: 503,
+      message: HF_UNAVAILABLE_MESSAGE,
+      fallbackToFixtures: false,
+    };
+  }
+
+  if (status === 408 || isTimeout(error)) {
+    return {
+      kind: "timeout",
+      status: 504,
+      message: HF_TIMEOUT_MESSAGE,
+      fallbackToFixtures: false,
+    };
+  }
+
+  if (status !== undefined && status >= 500) {
     return {
       kind: "unavailable",
       status: 503,

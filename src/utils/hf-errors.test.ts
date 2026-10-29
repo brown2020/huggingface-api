@@ -4,6 +4,7 @@ import {
   HF_AUTH_MESSAGE,
   HF_CREDITS_MESSAGE,
   HF_RATE_MESSAGE,
+  HF_TIMEOUT_MESSAGE,
   HF_UNAVAILABLE_MESSAGE,
   classifyUpstreamFailure,
   scrubPublicErrorText,
@@ -42,6 +43,18 @@ describe("classifyUpstreamFailure", () => {
       message: HF_CREDITS_MESSAGE,
       fallbackToFixtures: true,
     });
+    expect(HF_CREDITS_MESSAGE).toBe(
+      "The Hugging Face demo is out of credits right now."
+    );
+  });
+
+  it("treats an exceeded-quota body as a credit failure", () => {
+    const failure = classifyUpstreamFailure(
+      providerError(400, "You have exceeded quota for inference")
+    );
+    expect(failure?.kind).toBe("credits");
+    expect(failure?.message).toBe(HF_CREDITS_MESSAGE);
+    expect(JSON.stringify(failure)).not.toContain(PLANTED_TOKEN);
   });
 
   it("treats a no-credits phrase as credits even when status is 403", () => {
@@ -72,14 +85,14 @@ describe("classifyUpstreamFailure", () => {
       kind: "auth",
       status: 401,
       message: HF_AUTH_MESSAGE,
-      fallbackToFixtures: true,
+      fallbackToFixtures: false,
     });
     const forbidden = classifyUpstreamFailure(providerError(403, "Forbidden"));
     expect(forbidden).toMatchObject({
       kind: "auth",
       status: 403,
       message: HF_AUTH_MESSAGE,
-      fallbackToFixtures: true,
+      fallbackToFixtures: false,
     });
     expect(JSON.stringify(unauthorized)).not.toContain(PLANTED_TOKEN);
     expect(JSON.stringify(forbidden)).not.toContain("Bearer");
@@ -95,35 +108,43 @@ describe("classifyUpstreamFailure", () => {
     });
   });
 
-  it("maps 5xx and request timeout to unavailable", () => {
-    for (const status of [500, 502, 503, 504]) {
+  it("maps HTTP 503 to unavailable and other 5xx the same way", () => {
+    expect(classifyUpstreamFailure(providerError(503, "down"))).toEqual({
+      kind: "unavailable",
+      status: 503,
+      message: HF_UNAVAILABLE_MESSAGE,
+      fallbackToFixtures: false,
+    });
+    for (const status of [500, 502]) {
       const failure = classifyUpstreamFailure(providerError(status, "boom"));
-      expect(failure).toEqual({
-        kind: "unavailable",
-        status: 503,
-        message: HF_UNAVAILABLE_MESSAGE,
-        fallbackToFixtures: false,
-      });
+      expect(failure?.kind).toBe("unavailable");
+      expect(failure?.status).toBe(503);
     }
-    expect(classifyUpstreamFailure(providerError(408, "request timeout"))?.kind).toBe(
-      "unavailable"
-    );
   });
 
-  it("maps abort and timeout errors without an HTTP status", () => {
+  it("maps abort and timeout errors to 504", () => {
     const abort = new Error("The operation was aborted");
     abort.name = "AbortError";
-    expect(classifyUpstreamFailure(abort)?.message).toBe(HF_UNAVAILABLE_MESSAGE);
+    expect(classifyUpstreamFailure(abort)).toMatchObject({
+      kind: "timeout",
+      status: 504,
+      message: HF_TIMEOUT_MESSAGE,
+    });
 
     const timedOut = new Error("connect timed out");
-    expect(classifyUpstreamFailure(timedOut)?.kind).toBe("unavailable");
+    expect(classifyUpstreamFailure(timedOut)?.kind).toBe("timeout");
+
+    expect(classifyUpstreamFailure(providerError(408, "request timeout"))?.status).toBe(
+      504
+    );
 
     const wrapped = new Error("fetch failed");
     (wrapped as Error & { cause?: unknown }).cause = Object.assign(
       new Error("connect timeout"),
       { code: "UND_ERR_CONNECT_TIMEOUT" }
     );
-    expect(classifyUpstreamFailure(wrapped)?.status).toBe(503);
+    expect(classifyUpstreamFailure(wrapped)?.status).toBe(504);
+    expect(JSON.stringify(classifyUpstreamFailure(wrapped))).not.toContain("fetch failed");
   });
 
   it("leaves unrelated errors unclassified and ignores HttpError", () => {

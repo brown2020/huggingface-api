@@ -12,6 +12,7 @@ import {
   HF_AUTH_MESSAGE,
   HF_CREDITS_MESSAGE,
   HF_RATE_MESSAGE,
+  HF_TIMEOUT_MESSAGE,
   HF_UNAVAILABLE_MESSAGE,
 } from "@/utils/hf-errors";
 import {
@@ -33,10 +34,8 @@ vi.mock("@/utils/hf", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/utils/hf")>();
   return {
     ...actual,
-    inference: {
-      chatCompletion: (...args: unknown[]) => hfMocks.chatCompletion(...args),
-      textToImage: (...args: unknown[]) => hfMocks.textToImage(...args),
-    },
+    hfChatCompletion: (...args: unknown[]) => hfMocks.chatCompletion(...args),
+    hfTextToImage: (...args: unknown[]) => hfMocks.textToImage(...args),
   };
 });
 
@@ -129,6 +128,8 @@ describe("POST /api/hf denial and fixtures", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.fixture).toBe(true);
+    expect(body.demoData).toBe(true);
+    expect(body.notice).toBeUndefined();
     expect(String(body.message)).toContain("[fixture]");
   });
 
@@ -143,6 +144,8 @@ describe("POST /api/hf denial and fixtures", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/png");
     expect(res.headers.get("X-HF-Fixture")).toBe("true");
+    expect(res.headers.get("X-HF-Demo-Data")).toBe("true");
+    expect(res.headers.get("X-HF-Notice")).toBeNull();
     const buf = Buffer.from(await res.arrayBuffer());
     expect(buf[0]).toBe(0x89);
   });
@@ -342,8 +345,8 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     expect(body).toEqual({
       message: FIXTURE_COMPLETION,
       fixture: true,
-      demoMode: true,
-      demoReason: HF_CREDITS_MESSAGE,
+      demoData: true,
+      notice: HF_CREDITS_MESSAGE,
     });
     const serialized = JSON.stringify(body);
     expect(serialized).not.toContain(PLANTED_TOKEN);
@@ -360,19 +363,31 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.message).toBe(FIXTURE_TRANSLATION);
-    expect(body.demoReason).toBe(HF_CREDITS_MESSAGE);
+    expect(body.demoData).toBe(true);
+    expect(body.notice).toBe(HF_CREDITS_MESSAGE);
     expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
   });
 
-  it("falls back when the server token is rejected", async () => {
+  it("returns 401 JSON when the server token is rejected", async () => {
     hfMocks.chatCompletion.mockRejectedValue(providerError(401, "Invalid credentials"));
+    const res = await liveJson("comp", { message: "hello" });
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body).toEqual({ error: HF_AUTH_MESSAGE });
+    expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
+  });
+
+  it("falls back when the body says the quota is exceeded", async () => {
+    hfMocks.chatCompletion.mockRejectedValue(
+      providerError(403, "You have exceeded quota for this account")
+    );
     const res = await liveJson("comp", { message: "hello" });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.fixture).toBe(true);
-    expect(body.demoMode).toBe(true);
-    expect(body.demoReason).toBe(HF_AUTH_MESSAGE);
+    expect(body.demoData).toBe(true);
+    expect(body.notice).toBe(HF_CREDITS_MESSAGE);
     expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
+    expect(JSON.stringify(body)).not.toContain("exceeded quota");
   });
 
   it("returns 429 JSON when Hugging Face rate limits the call", async () => {
@@ -384,20 +399,23 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
   });
 
-  it("returns 503 JSON when Hugging Face is down or times out", async () => {
-    hfMocks.chatCompletion.mockRejectedValue(providerError(502, "bad gateway"));
+  it("returns 503 JSON when Hugging Face is unavailable", async () => {
+    hfMocks.chatCompletion.mockRejectedValue(providerError(503, "unavailable"));
     const down = await liveJson("comp", { message: "hello" });
     expect(down.status).toBe(503);
     expect(await down.json()).toEqual({ error: HF_UNAVAILABLE_MESSAGE });
+  });
 
+  it("returns 504 JSON when Hugging Face times out", async () => {
     const timeout = new Error("The operation was aborted due to timeout");
     timeout.name = "TimeoutError";
     hfMocks.chatCompletion.mockRejectedValue(timeout);
     const timed = await liveJson("comp", { message: "hello again" });
-    expect(timed.status).toBe(503);
+    expect(timed.status).toBe(504);
     const body = await timed.json();
-    expect(body).toEqual({ error: HF_UNAVAILABLE_MESSAGE });
+    expect(body).toEqual({ error: HF_TIMEOUT_MESSAGE });
     expect(JSON.stringify(body)).not.toContain("aborted");
+    expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
   });
 
   it("hides an unclassified provider body", async () => {
@@ -420,9 +438,9 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/png");
     expect(res.headers.get("X-HF-Fixture")).toBe("true");
-    expect(res.headers.get("X-HF-Demo-Mode")).toBe("true");
-    expect(res.headers.get("X-HF-Demo-Reason")).toBe(HF_CREDITS_MESSAGE);
-    expect(res.headers.get("X-HF-Demo-Reason")).not.toContain(PLANTED_TOKEN);
+    expect(res.headers.get("X-HF-Demo-Data")).toBe("true");
+    expect(res.headers.get("X-HF-Notice")).toBe(HF_CREDITS_MESSAGE);
+    expect(res.headers.get("X-HF-Notice")).not.toContain(PLANTED_TOKEN);
     const buf = Buffer.from(await res.arrayBuffer());
     expect(buf[0]).toBe(0x89);
     expect(buf.toString("utf8")).not.toContain(PLANTED_TOKEN);
@@ -447,7 +465,8 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.fixture).toBe(true);
-    expect(body.demoReason).toBe(HF_CREDITS_MESSAGE);
+    expect(body.demoData).toBe(true);
+    expect(body.notice).toBe(HF_CREDITS_MESSAGE);
     expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
   });
 });

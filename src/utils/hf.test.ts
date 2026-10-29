@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { getBestProvider, canonicalizeModelId } from "./hf";
+import { describe, expect, it, vi } from "vitest";
+import { HttpError } from "./http-error";
+import { getBestProvider, canonicalizeModelId, withHfErrors } from "./hf";
+import { HF_CREDITS_MESSAGE, HF_TIMEOUT_MESSAGE } from "./hf-errors";
 import {
   FIXTURE_COMPLETION,
   fixturePngBuffer,
   hfFixturesEnabled,
+  savedFixturesExist,
 } from "./hf-fixtures";
 import { DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from "./models";
 
@@ -69,5 +72,41 @@ describe("hf fixtures (labeled — no paid credit burn)", () => {
     expect(hfFixturesEnabled()).toBe(false);
     if (prev === undefined) delete process.env.HF_USE_FIXTURES;
     else process.env.HF_USE_FIXTURES = prev;
+  });
+
+  it("ships saved samples for the credit fallback", () => {
+    expect(savedFixturesExist()).toBe(true);
+  });
+});
+
+describe("withHfErrors", () => {
+  it("maps a credit failure to a safe 402 and does not log the token", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const token = "hf_TESTTOKENSHOULDNOTLEAK";
+    const error = Object.assign(new Error(`no credits ${token}`), {
+      httpResponse: {
+        status: 402,
+        body: { error: "You have no remaining credits", token },
+      },
+      httpRequest: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    await expect(withHfErrors(() => Promise.reject(error))).rejects.toMatchObject({
+      status: 402,
+      message: HF_CREDITS_MESSAGE,
+    });
+    expect(logged.mock.calls.flat().join(" ")).not.toContain(token);
+    logged.mockRestore();
+  });
+
+  it("maps a timeout to 504", async () => {
+    const timeout = new Error("timed out");
+    timeout.name = "TimeoutError";
+    await expect(withHfErrors(() => Promise.reject(timeout))).rejects.toEqual(
+      expect.any(HttpError)
+    );
+    await expect(withHfErrors(() => Promise.reject(timeout))).rejects.toMatchObject({
+      status: 504,
+      message: HF_TIMEOUT_MESSAGE,
+    });
   });
 });

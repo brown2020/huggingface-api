@@ -23,9 +23,9 @@ A single-page demo. The operator picks a task, optionally types a shared API key
 | `imgtt` | multipart field `image` | Replicate `yorickvp/llava-13b`, polled to a terminal prediction | `{ "message": caption }` |
 | `ttpng` | JSON `prompt`, optional `negative_prompt`, optional `model` | HF `textToImage` | image bytes |
 
-Fixture mode (`HF_USE_FIXTURES=true`) returns labeled text or a 1×1 PNG and sets `fixture: true` or `X-HF-Fixture: true`. It does not call Hugging Face or Replicate. That response does not set demo-mode fields.
+Fixture mode (`HF_USE_FIXTURES=true`) returns labeled text or a 1×1 PNG and sets `fixture: true`, `demoData: true`, or `X-HF-Fixture` and `X-HF-Demo-Data`. It does not call Hugging Face or Replicate. The page shows a small “Demo data” badge.
 
-If fixtures are off and a live call fails because credits are exhausted or the server token is rejected, the route still returns that fixture with HTTP 200. JSON adds `demoMode: true` and `demoReason`. Text-to-image adds `X-HF-Demo-Mode: true` and `X-HF-Demo-Reason`. The page shows a banner titled “Demo mode: sample results” and the reason. `HF_USE_FIXTURES` stays unset; the fallback is per response.
+If a live call fails because credits are exhausted (HTTP 402, a body mentioning credits, or “exceeded quota”) and those saved samples exist, the route returns the same fixture with HTTP 200, `demoData: true`, and `notice` set to `The Hugging Face demo is out of credits right now.` Text-to-image sends that sentence in `X-HF-Notice`. The page shows the badge, that sentence, and the sample.
 
 ## Models
 
@@ -65,16 +65,18 @@ The shared-secret check in `guardApiRequest` is unchanged and runs before any pr
 | Status | When |
 | --- | --- |
 | 400 | Bad `type`, schema failure, bad image, bad body |
-| 401 | Shared secret required and missing or wrong |
-| 403 | `Origin` host does not match the request host |
+| 401 | Shared secret required and missing or wrong, or Hugging Face returned 401. The provider case body is `{ "error": "The server token is invalid." }` |
+| 403 | `Origin` host does not match the request host, or Hugging Face returned 403 without a credit or quota phrase. The provider case uses the same invalid-token sentence. |
 | 405 | `GET /api/hf` |
 | 413 | `Content-Length` over 5 MiB |
+| 402 | Hugging Face reported no credits and the saved samples are missing. Body is `{ "error": "The Hugging Face demo is out of credits right now." }` |
 | 429 | App rate limit, or Hugging Face returned 429. The Hugging Face case body is `{ "error": "Hugging Face is rate limiting requests. Try again shortly." }` |
-| 503 | Live mode while `HF_API_SECRET` is unset (`Live inference is disabled`), or Hugging Face returned 408 or 5xx, or the call timed out. The provider case body is `{ "error": "Hugging Face is unavailable right now." }` |
+| 503 | Live mode while `HF_API_SECRET` is unset (`Live inference is disabled`), or Hugging Face returned 503 or another 5xx. The provider case body is `{ "error": "Hugging Face is unavailable right now." }` |
+| 504 | The Hugging Face call timed out. Body is `{ "error": "Hugging Face timed out. Try again shortly." }` |
 | 500 | Any other failure. Body is `{ "error": "An unexpected error occurred" }`. |
-| 200 fixture | Upstream HTTP 402, a no-credits message such as “You have no remaining credits”, or upstream HTTP 401/403 that is not a credit failure. `demoReason` is `The demo's Hugging Face credits are used up.` or `The server token is invalid.` |
+| 200 fixture | `HF_USE_FIXTURES=true`, or a credit/quota failure while saved samples exist. Credit fallback also sets `notice` to `The Hugging Face demo is out of credits right now.` |
 
-A credit phrase wins over HTTP 401 or 403, so a credit failure is not described as a bad token. Classification reads the status and a short slice of the provider message or body, then discards that text. The JSON body and image headers contain only the fixed sentence. The server log records the error name, failure kind, and status. None of those include the provider body, `Authorization`, or the token. The form renders a JSON `error` string in the alert and does not render a non-JSON body.
+A credit or quota phrase wins over HTTP 401 or 403, so that failure is not described as a bad token. Classification reads the status and a short slice of the provider message or body, then discards that text. `src/utils/hf.ts` turns the failure into a safe `HttpError` before the route answers. The JSON body and image headers contain only the fixed sentence. The server log records the error name, failure kind, and status. None of those include the provider body, `Authorization`, or the token. The form renders a JSON `error` string in the alert and does not render a non-JSON body.
 
 ## Runtime
 

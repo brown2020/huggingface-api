@@ -30,19 +30,23 @@ export function formatClientError(statusText: string, bodyText: string): string 
   return "Request failed";
 }
 
-export function demoReasonFromPayload(data: unknown): string | null {
-  if (!data || typeof data !== "object") return null;
-  const record = data as { demoMode?: unknown; demoReason?: unknown };
-  if (record.demoMode !== true) return null;
-  if (typeof record.demoReason !== "string" || !isSafePublicText(record.demoReason)) {
-    return null;
-  }
-  return record.demoReason.trim();
+export type DemoPresentation = {
+  demoData: boolean;
+  notice: string | null;
+};
+
+export function demoPresentationFromPayload(data: unknown): DemoPresentation {
+  if (!data || typeof data !== "object") return { demoData: false, notice: null };
+  const record = data as { demoData?: unknown; notice?: unknown };
+  const notice =
+    typeof record.notice === "string" && isSafePublicText(record.notice)
+      ? record.notice.trim()
+      : null;
+  return { demoData: record.demoData === true, notice };
 }
 
-export function demoReasonFromHeaders(headers: Headers): string | null {
-  if (headers.get("X-HF-Demo-Mode") !== "true") return null;
-  const reason = headers.get("X-HF-Demo-Reason") ?? "";
-  if (!isSafePublicText(reason)) return null;
-  return reason.trim();
+export function demoPresentationFromHeaders(headers: Headers): DemoPresentation {
+  const raw = headers.get("X-HF-Notice") ?? "";
+  const notice = isSafePublicText(raw) ? raw.trim() : null;
+  return { demoData: headers.get("X-HF-Demo-Data") === "true", notice };
 }

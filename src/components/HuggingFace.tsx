@@ -2,10 +2,10 @@
 
 import { useRef, useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
-import { DemoModeBanner } from "@/components/demo-mode-banner";
+import { DemoDataBadge } from "@/components/demo-mode-banner";
 import {
-  demoReasonFromHeaders,
-  demoReasonFromPayload,
+  demoPresentationFromHeaders,
+  demoPresentationFromPayload,
   formatClientError,
 } from "@/utils/client-error";
 import { formatResultMessage } from "@/utils/format-result";
@@ -42,7 +42,8 @@ export default function HuggingFace() {
   const [imageResult, setImageResult] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState("");
-  const [demoReason, setDemoReason] = useState<string | null>(null);
+  const [demoData, setDemoData] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   function withApiKey(init: RequestInit): RequestInit {
@@ -58,7 +59,8 @@ export default function HuggingFace() {
     setError("");
     setResult(null);
     setImageResult(null);
-    setDemoReason(null);
+    setDemoData(false);
+    setNotice(null);
     setLoading(true);
 
     let requestInit: RequestInit | null = null;
@@ -106,13 +108,17 @@ export default function HuggingFace() {
       }
 
       if (type === "ttpng") {
-        setDemoReason(demoReasonFromHeaders(response.headers));
+        const presentation = demoPresentationFromHeaders(response.headers);
+        setDemoData(presentation.demoData);
+        setNotice(presentation.notice);
         const blob = await response.blob();
         const dataUrl = await blobToDataUrl(blob);
         setImageResult(dataUrl);
       } else {
         const data = (await response.json()) as { message?: unknown };
-        setDemoReason(demoReasonFromPayload(data));
+        const presentation = demoPresentationFromPayload(data);
+        setDemoData(presentation.demoData);
+        setNotice(presentation.notice);
         setResult(formatResultMessage(data.message));
       }
     } catch (err: unknown) {
@@ -324,7 +330,16 @@ export default function HuggingFace() {
           <span className="sr-only">Loading</span>
         </div>
       )}
-      {demoReason && <DemoModeBanner reason={demoReason} />}
+      {(demoData || notice) && (
+        <div className="mt-4 flex flex-col items-start gap-2">
+          {demoData && <DemoDataBadge />}
+          {notice && (
+            <p className="text-sm text-amber-950" role="status">
+              {notice}
+            </p>
+          )}
+        </div>
+      )}
       {error && (
         <div className="mt-4 text-red-700" role="alert">
           <strong>Error:</strong> {error}

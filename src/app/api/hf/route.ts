@@ -1,20 +1,22 @@
 import { NextResponse } from "next/server";
 import { guardApiRequest } from "@/utils/api-guard";
-import { inference, getBestProvider, canonicalizeModelId } from "@/utils/hf";
+import { getBestProvider, canonicalizeModelId, hfChatCompletion, hfTextToImage } from "@/utils/hf";
 import {
   FIXTURE_COMPLETION,
   FIXTURE_IMAGE_CAPTION,
   FIXTURE_TRANSLATION,
   fixturePngBuffer,
   hfFixturesEnabled,
+  savedFixturesExist,
 } from "@/utils/hf-fixtures";
 import {
   DEFAULT_CHAT_MODEL,
   DEFAULT_IMAGE_MODEL,
 } from "@/utils/models";
 import {
-  DEMO_MODE_HEADER,
-  DEMO_REASON_HEADER,
+  DEMO_DATA_HEADER,
+  HF_CREDITS_MESSAGE,
+  NOTICE_HEADER,
   classifyUpstreamFailure,
   headerSafeReason,
   scrubPublicErrorText,
@@ -67,20 +69,18 @@ function jsonError(status: number, error: unknown) {
   );
 }
 
-function demoFixtureResponse(type: HfRouteType, reason: string): Response {
-  const safeReason = headerSafeReason(reason);
+function sampleResponse(type: HfRouteType, notice?: string): Response {
+  const safeNotice = notice ? headerSafeReason(notice) : "";
   if (type === "ttpng") {
     const buffer = fixturePngBuffer();
-    return new Response(new Uint8Array(buffer), {
-      status: 200,
-      headers: {
-        "Content-Type": "image/png",
-        "Content-Disposition": "inline; filename=fixture-image.png",
-        "X-HF-Fixture": "true",
-        [DEMO_MODE_HEADER]: "true",
-        [DEMO_REASON_HEADER]: safeReason,
-      },
-    });
+    const headers: Record<string, string> = {
+      "Content-Type": "image/png",
+      "Content-Disposition": "inline; filename=fixture-image.png",
+      "X-HF-Fixture": "true",
+      [DEMO_DATA_HEADER]: "true",
+    };
+    if (safeNotice) headers[NOTICE_HEADER] = safeNotice;
+    return new Response(new Uint8Array(buffer), { status: 200, headers });
   }
 
   const message =
@@ -93,8 +93,11 @@ function demoFixtureResponse(type: HfRouteType, reason: string): Response {
   return NextResponse.json({
     message,
     fixture: true,
-    demoMode: true,
-    demoReason: safeReason,
+    demoData: true,
+    ...(type === "imgtt" && !safeNotice
+      ? { note: "Fixture mode — Replicate not called." }
+      : {}),
+    ...(safeNotice ? { notice: safeNotice } : {}),
   });
 }
 
@@ -138,17 +141,14 @@ async function handleCompletion(request: Request) {
   if (!parsed.success) return jsonError(400, parsed.error.flatten());
 
   if (hfFixturesEnabled()) {
-    return NextResponse.json({
-      message: FIXTURE_COMPLETION,
-      fixture: true,
-    });
+    return sampleResponse("comp");
   }
 
   const { message, max_tokens, model } = parsed.data;
   const modelId = canonicalizeModelId(model || DEFAULT_CHAT_MODEL);
   const provider = getBestProvider(modelId, "chatCompletion");
 
-  const out = await inference.chatCompletion({
+  const out = await hfChatCompletion({
     model: modelId,
     messages: [{ role: "user", content: message }],
     max_tokens: max_tokens || 1000,
@@ -164,17 +164,14 @@ async function handleTranslation(request: Request) {
   if (!parsed.success) return jsonError(400, parsed.error.flatten());
 
   if (hfFixturesEnabled()) {
-    return NextResponse.json({
-      message: FIXTURE_TRANSLATION,
-      fixture: true,
-    });
+    return sampleResponse("translation");
   }
 
   const { text, targetLang, model } = parsed.data;
   const modelId = canonicalizeModelId(model || DEFAULT_CHAT_MODEL);
   const provider = getBestProvider(modelId, "chatCompletion");
 
-  const out = await inference.chatCompletion({
+  const out = await hfChatCompletion({
     model: modelId,
     messages: [
       {
@@ -202,11 +199,7 @@ async function handleImageToText(request: Request) {
   const mediaType = imageResponseContentType(imageFile.type);
 
   if (hfFixturesEnabled()) {
-    return NextResponse.json({
-      message: FIXTURE_IMAGE_CAPTION,
-      fixture: true,
-      note: "Fixture mode — Replicate not called.",
-    });
+    return sampleResponse("imgtt");
   }
 
   const arrayBuffer = await imageFile.arrayBuffer();
@@ -226,30 +219,19 @@ async function handleTextToPng(request: Request) {
   if (!parsed.success) return jsonError(400, parsed.error.flatten());
 
   if (hfFixturesEnabled()) {
-    const buffer = fixturePngBuffer();
-    return new Response(new Uint8Array(buffer), {
-      status: 200,
-      headers: {
-        "Content-Type": "image/png",
-        "Content-Disposition": "inline; filename=fixture-image.png",
-        "X-HF-Fixture": "true",
-      },
-    });
+    return sampleResponse("ttpng");
   }
 
   const { prompt, negative_prompt, model } = parsed.data;
   const modelId = canonicalizeModelId(model || DEFAULT_IMAGE_MODEL);
   const provider = getBestProvider(modelId, "textToImage");
 
-  const out = await inference.textToImage(
-    {
-      model: modelId,
-      inputs: prompt,
-      parameters: { negative_prompt: negative_prompt || "blurry" },
-      provider,
-    },
-    { outputType: "blob" }
-  );
+  const out = await hfTextToImage({
+    model: modelId,
+    inputs: prompt,
+    parameters: { negative_prompt: negative_prompt || "blurry" },
+    provider,
+  });
 
   const buffer = Buffer.from(await out.arrayBuffer());
   return new Response(new Uint8Array(buffer), {
@@ -283,16 +265,37 @@ export async function POST(request: Request) {
 
     return await handlers[type](request);
   } catch (error: unknown) {
+    const fromClient =
+      error instanceof HttpError && error.status === 402
+        ? {
+            kind: "credits" as const,
+            status: 402,
+            message: HF_CREDITS_MESSAGE,
+            fallbackToFixtures: true,
+          }
+        : error instanceof HttpError
+          ? null
+          : classifyUpstreamFailure(error);
+
+    if (!(error instanceof HttpError)) {
+      logUpstreamFailure(error, fromClient);
+    }
+
+    if (
+      fromClient?.kind === "credits" &&
+      fromClient.fallbackToFixtures &&
+      savedFixturesExist()
+    ) {
+      return sampleResponse(type, fromClient.message);
+    }
+    if (fromClient) {
+      return NextResponse.json(
+        { error: fromClient.message },
+        { status: fromClient.status }
+      );
+    }
     if (error instanceof HttpError) {
       return jsonError(error.status, error.message);
-    }
-    const failure = classifyUpstreamFailure(error);
-    logUpstreamFailure(error, failure);
-    if (failure?.fallbackToFixtures) {
-      return demoFixtureResponse(type, failure.message);
-    }
-    if (failure) {
-      return NextResponse.json({ error: failure.message }, { status: failure.status });
     }
     return NextResponse.json(
       { error: "An unexpected error occurred" },

@@ -25,3 +25,13 @@ export function fixturePngBuffer(): Buffer {
 export function hfFixturesEnabled(): boolean {
   return process.env.HF_USE_FIXTURES === "true";
 }
+
+/** Saved samples shipped with the app. Credit failures use these when present. */
+export function savedFixturesExist(): boolean {
+  return (
+    FIXTURE_COMPLETION.length > 0 &&
+    FIXTURE_TRANSLATION.length > 0 &&
+    FIXTURE_IMAGE_CAPTION.length > 0 &&
+    fixturePngBuffer().byteLength > 0
+  );
+}

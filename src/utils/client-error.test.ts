@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  demoReasonFromHeaders,
-  demoReasonFromPayload,
+  demoPresentationFromHeaders,
+  demoPresentationFromPayload,
   formatClientError,
 } from "./client-error";
 import { HF_CREDITS_MESSAGE, HF_RATE_MESSAGE } from "./hf-errors";
@@ -37,37 +37,43 @@ describe("formatClientError", () => {
   });
 });
 
-describe("demo reason parsing", () => {
-  it("reads a safe demo reason from JSON", () => {
+describe("demo presentation", () => {
+  it("reads the demo-data badge and the credit notice", () => {
     expect(
-      demoReasonFromPayload({
-        demoMode: true,
-        demoReason: HF_CREDITS_MESSAGE,
+      demoPresentationFromPayload({
+        demoData: true,
+        notice: HF_CREDITS_MESSAGE,
         message: "[fixture]",
       })
-    ).toBe(HF_CREDITS_MESSAGE);
+    ).toEqual({ demoData: true, notice: HF_CREDITS_MESSAGE });
   });
 
-  it("ignores fixture payloads that are not a fallback", () => {
-    expect(demoReasonFromPayload({ fixture: true, message: "[fixture]" })).toBeNull();
-  });
-
-  it("rejects an unsafe demo reason and reads image headers", () => {
-    expect(
-      demoReasonFromPayload({ demoMode: true, demoReason: PLANTED_TOKEN })
-    ).toBeNull();
-    const headers = new Headers({
-      "X-HF-Demo-Mode": "true",
-      "X-HF-Demo-Reason": HF_CREDITS_MESSAGE,
+  it("shows the badge for fixture mode without a credit notice", () => {
+    expect(demoPresentationFromPayload({ fixture: true, demoData: true, message: "[fixture]" })).toEqual({
+      demoData: true,
+      notice: null,
     });
-    expect(demoReasonFromHeaders(headers)).toBe(HF_CREDITS_MESSAGE);
+  });
+
+  it("rejects an unsafe notice and reads image headers", () => {
     expect(
-      demoReasonFromHeaders(
+      demoPresentationFromPayload({ demoData: true, notice: PLANTED_TOKEN })
+    ).toEqual({ demoData: true, notice: null });
+    const headers = new Headers({
+      "X-HF-Demo-Data": "true",
+      "X-HF-Notice": HF_CREDITS_MESSAGE,
+    });
+    expect(demoPresentationFromHeaders(headers)).toEqual({
+      demoData: true,
+      notice: HF_CREDITS_MESSAGE,
+    });
+    expect(
+      demoPresentationFromHeaders(
         new Headers({
-          "X-HF-Demo-Mode": "true",
-          "X-HF-Demo-Reason": `Bearer ${PLANTED_TOKEN}`,
+          "X-HF-Demo-Data": "true",
+          "X-HF-Notice": `Bearer ${PLANTED_TOKEN}`,
         })
       )
-    ).toBeNull();
+    ).toEqual({ demoData: true, notice: null });
   });
 });
