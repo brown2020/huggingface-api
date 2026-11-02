@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { guardApiRequest } from "@/utils/api-guard";
 import {
-  HF_IMAGE_TO_TEXT_MODEL,
   canonicalizeModelId,
   getBestProvider,
   hfChatCompletion,
-  hfImageToText,
   hfTextToImage,
 } from "@/utils/hf";
 import {
@@ -35,6 +33,7 @@ import {
   imageResponseContentType,
   requireImageFile,
 } from "@/utils/image-file";
+import { captionWithLlava13bUrl } from "@/utils/replicate";
 import {
   chatSchema,
   textToImageSchema,
@@ -209,25 +208,8 @@ async function handleTranslation(request: Request) {
   return NextResponse.json({ message: out.choices[0]?.message?.content ?? "" });
 }
 
-/** Plain text from an image-to-text payload. Empty means the call did not caption. */
-function captionText(output: unknown): string {
-  if (typeof output === "string") return output.trim();
-  if (Array.isArray(output)) {
-    for (const item of output) {
-      const text = captionText(item);
-      if (text) return text;
-    }
-    return "";
-  }
-  if (!output || typeof output !== "object") return "";
-  const record = output as { generated_text?: unknown; generatedText?: unknown };
-  if (typeof record.generated_text === "string") return record.generated_text.trim();
-  if (typeof record.generatedText === "string") return record.generatedText.trim();
-  return "";
-}
-
 /**
- * Fixed sentence for an image-to-text sample.
+ * Fixed sentence for an image-caption sample.
  * Credit failures keep the credits sentence. Other classified failures use
  * their own fixed sentence. Anything else uses the unavailable sentence.
  */
@@ -246,22 +228,22 @@ async function handleImageToText(request: Request) {
     throw new HttpError(400, "Invalid form body");
   }
   const imageFile = requireImageFile(formData.get("image"));
+  const mediaType = imageResponseContentType(imageFile.type);
 
   if (hfFixturesEnabled()) {
     return sampleResponse("imgtt");
   }
 
+  const arrayBuffer = await imageFile.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  const dataUrl = `data:${mediaType};base64,${base64}`;
+
   try {
-    const output = await hfImageToText({
-      model: HF_IMAGE_TO_TEXT_MODEL,
-      inputs: imageFile,
-      provider: getBestProvider(HF_IMAGE_TO_TEXT_MODEL, "imageToText"),
+    const output = await captionWithLlava13bUrl({ imageUrl: dataUrl });
+    return NextResponse.json({
+      message: output,
+      note: "No HF Inference provider available for this HF model; using Replicate LLaVA-13B via REPLICATE_API_TOKEN.",
     });
-    const text = captionText(output);
-    if (!text) {
-      throw new Error("Image captioning returned no output");
-    }
-    return NextResponse.json({ message: text });
   } catch (error) {
     if (!(error instanceof HfCallError) && !(error instanceof HttpError)) {
       logUpstreamFailure(error, failureFrom(error));

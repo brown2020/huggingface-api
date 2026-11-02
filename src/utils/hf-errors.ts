@@ -155,6 +155,15 @@ export function classifyUpstreamFailure(error: unknown): UpstreamFailure | null 
     };
   }
 
+  if (isMissingReplicateToken(error)) {
+    return {
+      kind: "unavailable",
+      status: 503,
+      message: HF_UNAVAILABLE_MESSAGE,
+      fallbackToFixtures: true,
+    };
+  }
+
   return null;
 }
 
@@ -220,6 +229,13 @@ function appendBodyText(chunks: string[], body: unknown) {
       chunks.push((value as { message: string }).message.slice(0, 2000));
     }
   }
+}
+
+function isMissingReplicateToken(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes("REPLICATE_API_TOKEN is not set")
+  );
 }
 
 function isTimeout(error: unknown, depth = 0): boolean {

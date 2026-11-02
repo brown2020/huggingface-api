@@ -20,12 +20,12 @@ A single-page demo. The operator picks a task, types the demo password when the 
 | --- | --- | --- | --- |
 | `comp` | JSON `message`, optional `model`, optional `max_tokens` | HF `chatCompletion` | `{ "message": string }` |
 | `translation` | JSON `text`, optional `targetLang` (default French), optional `model` | HF `chatCompletion` with a translation prompt | `{ "message": string }` |
-| `imgtt` | multipart field `image` | HF `imageToText` on `Salesforce/blip-image-captioning-base` (`hf-inference`) | `{ "message": caption }` |
+| `imgtt` | multipart field `image` | Replicate `yorickvp/llava-13b`, polled to a terminal prediction | `{ "message": caption }` |
 | `ttpng` | JSON `prompt`, optional `negative_prompt`, optional `model` | HF `textToImage` | image bytes |
 
 Fixture mode (`HF_USE_FIXTURES=true`) returns labeled text or a 1×1 PNG and sets `fixture: true`, `demoData: true`, or `X-HF-Fixture` and `X-HF-Demo-Data`. It does not call Hugging Face or Replicate. The page shows a small “Demo data” badge.
 
-If fixtures are off, the handler calls Hugging Face. A failure for credits, an exceeded quota, HTTP 401, HTTP 429, HTTP 503, or a timeout returns that same fixture with HTTP 200 and `demoData: true` when the saved samples exist. A credit or quota failure also sets `notice` to `The Hugging Face demo is out of credits right now.` Text-to-image sends that sentence in `X-HF-Notice`. The page shows the badge and the sample. Other provider failures stay JSON errors, except image-to-text: HTTP 403, 404, 410, other 5xx, and a thrown provider error also return the caption sample with `notice`.
+If fixtures are off, chat, translation, and text-to-image call Hugging Face. A failure for credits, an exceeded quota, HTTP 401, HTTP 429, HTTP 503, or a timeout returns that same fixture with HTTP 200 and `demoData: true` when the saved samples exist. A credit or quota failure also sets `notice` to `The Hugging Face demo is out of credits right now.` Text-to-image sends that sentence in `X-HF-Notice`. The page shows the badge and the sample. Other Hugging Face provider failures stay JSON errors. Image-to-text calls Replicate and also returns the caption sample with `notice` for HTTP 403, 404, 410, other 5xx, a missing `REPLICATE_API_TOKEN`, and any thrown provider error.
 
 ## Models
 
@@ -33,7 +33,7 @@ The UI only offers the catalog in `src/utils/models.ts`. The API rejects any oth
 
 Chat defaults to `deepseek-ai/DeepSeek-V3-0324` with provider `auto`. Image defaults to `black-forest-labs/FLUX.1-dev` with provider `auto`. Stable Diffusion XL is pinned to `fal-ai`. Other catalog entries use `auto`. Aliases in `canonicalizeModelId` map a few legacy ids onto those catalog ids.
 
-Image captioning does not take a model id from the client. It calls Hugging Face `imageToText` on the existing id `Salesforce/blip-image-captioning-base` with provider `hf-inference`. Any failure from that call — no credits, HTTP 402, 403, 404, 410, or 5xx, a missing model, or a thrown error — returns the saved caption with HTTP 200, `demoData: true`, and `notice` set to a fixed sentence. A bad or missing image is still 400. The saved caption is not a Replicate call.
+Image captioning does not take a model id. It always uses Replicate LLaVA-13B (`yorickvp/llava-13b`, polled). Any failure from that call — no credits, HTTP 402, 403, 404, 410, or 5xx, a missing `REPLICATE_API_TOKEN`, or a thrown error, including `ApiError` whose status is on `response` — returns the saved caption with HTTP 200, `demoData: true`, and `notice` set to a fixed sentence. A bad or missing image is still 400.
 
 ## Access control
 

@@ -180,6 +180,18 @@ describe("classifyUpstreamFailure", () => {
     expect(JSON.stringify(classifyUpstreamFailure(wrapped))).not.toContain("fetch failed");
   });
 
+  it("maps a missing Replicate token to the unavailable notice", () => {
+    const failure = classifyUpstreamFailure(
+      new Error("REPLICATE_API_TOKEN is not set")
+    );
+    expect(failure).toEqual({
+      kind: "unavailable",
+      status: 503,
+      message: HF_UNAVAILABLE_MESSAGE,
+      fallbackToFixtures: true,
+    });
+  });
+
   it("leaves unrelated errors unclassified and ignores HttpError", () => {
     const leaked = new Error(`HF_TOKEN is not set ${PLANTED_TOKEN}`);
     expect(classifyUpstreamFailure(leaked)).toBeNull();

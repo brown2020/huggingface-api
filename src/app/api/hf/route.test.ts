@@ -27,7 +27,6 @@ const PLANTED_TOKEN = "hf_TESTTOKENSHOULDNOTLEAK";
 const hfMocks = vi.hoisted(() => ({
   chatCompletion: vi.fn(),
   textToImage: vi.fn(),
-  imageToText: vi.fn(),
 }));
 
 vi.mock("@/utils/hf", async (importOriginal) => {
@@ -36,7 +35,6 @@ vi.mock("@/utils/hf", async (importOriginal) => {
     ...actual,
     hfChatCompletion: (...args: unknown[]) => hfMocks.chatCompletion(...args),
     hfTextToImage: (...args: unknown[]) => hfMocks.textToImage(...args),
-    hfImageToText: (...args: unknown[]) => hfMocks.imageToText(...args),
   };
 });
 
@@ -271,13 +269,15 @@ describe("POST /api/hf denial and fixtures", () => {
     expect(body.fixture).toBe(true);
   });
 
-  it("returns the caption sample when image-to-text throws", async () => {
+  it("returns the caption sample when LLaVA throws", async () => {
     process.env.HF_USE_FIXTURES = "false";
     process.env.HF_API_SECRET = TEST_API_SECRET;
+    delete process.env.REPLICATE_API_TOKEN;
     const thrown = new Error(`REPLICATE_API_TOKEN is not set ${PLANTED_TOKEN}`);
     thrown.name = "ApiError";
-    hfMocks.imageToText.mockRejectedValue(thrown);
-    const replicate = vi.spyOn(replicateMod, "captionWithLlava13bUrl");
+    const replicate = vi
+      .spyOn(replicateMod, "captionWithLlava13bUrl")
+      .mockRejectedValue(thrown);
     const form = new FormData();
     form.set("image", new File([new Uint8Array([1, 2, 3])], "dot.png", { type: "image/png" }));
     const res = await POST(
@@ -287,8 +287,9 @@ describe("POST /api/hf denial and fixtures", () => {
         body: form,
       })
     );
-    expect(hfMocks.imageToText).toHaveBeenCalledOnce();
-    expect(replicate).not.toHaveBeenCalled();
+    expect(replicate).toHaveBeenCalledOnce();
+    expect(hfMocks.chatCompletion).not.toHaveBeenCalled();
+    expect(hfMocks.textToImage).not.toHaveBeenCalled();
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.fixture).toBe(true);
@@ -296,6 +297,7 @@ describe("POST /api/hf denial and fixtures", () => {
     expect(body.notice).toBe(HF_UNAVAILABLE_MESSAGE);
     expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
     expect(JSON.stringify(body)).not.toMatch(/TOKEN|arrayBuffer|not set/i);
+    replicate.mockRestore();
   });
 
   it("rate-limits repeated calls (429)", async () => {
@@ -322,8 +324,6 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     hfMocks.chatCompletion.mockRejectedValue(new Error("unexpected hf chat call"));
     hfMocks.textToImage.mockReset();
     hfMocks.textToImage.mockRejectedValue(new Error("unexpected hf image call"));
-    hfMocks.imageToText.mockReset();
-    hfMocks.imageToText.mockRejectedValue(new Error("unexpected hf caption call"));
   });
 
   afterEach(() => {
@@ -489,11 +489,10 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     expect(buf.toString("utf8")).not.toContain(PLANTED_TOKEN);
   });
 
-  it("falls back to a caption fixture when captioning hits an upstream credit error", async () => {
-    hfMocks.imageToText.mockRejectedValue(
-      providerError(402, "You have no remaining credits")
-    );
-    const replicate = vi.spyOn(replicateMod, "captionWithLlava13bUrl");
+  it("falls back to a caption fixture when LLaVA hits an upstream credit error", async () => {
+    const replicate = vi
+      .spyOn(replicateMod, "captionWithLlava13bUrl")
+      .mockRejectedValue(replicateApiError(402, "You have no remaining credits"));
     const form = new FormData();
     form.set(
       "image",
@@ -506,8 +505,9 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
         body: form,
       })
     );
-    expect(hfMocks.imageToText).toHaveBeenCalledOnce();
-    expect(replicate).not.toHaveBeenCalled();
+    expect(replicate).toHaveBeenCalledOnce();
+    const imageUrl = replicate.mock.calls[0]?.[0]?.imageUrl;
+    expect(imageUrl?.startsWith("data:image/png;base64,")).toBe(true);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.fixture).toBe(true);
@@ -516,8 +516,10 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     expect(JSON.stringify(body)).not.toContain(PLANTED_TOKEN);
   });
 
-  it("returns the Hugging Face caption when image-to-text succeeds", async () => {
-    hfMocks.imageToText.mockResolvedValue({ generated_text: "a red cube on a table" });
+  it("returns the LLaVA caption when Replicate succeeds", async () => {
+    const replicate = vi
+      .spyOn(replicateMod, "captionWithLlava13bUrl")
+      .mockResolvedValue("a red cube on a table");
     const form = new FormData();
     form.set(
       "image",
@@ -530,19 +532,16 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
         body: form,
       })
     );
+    expect(replicate).toHaveBeenCalledOnce();
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ message: "a red cube on a table" });
-    const args = hfMocks.imageToText.mock.calls[0]?.[0] as {
-      model?: string;
-      provider?: string;
-      inputs?: Blob;
-    };
-    expect(args.model).toBe("Salesforce/blip-image-captioning-base");
-    expect(args.provider).toBe("hf-inference");
-    expect(args.inputs).toBeInstanceOf(Blob);
+    expect(await res.json()).toEqual({
+      message: "a red cube on a table",
+      note: "No HF Inference provider available for this HF model; using Replicate LLaVA-13B via REPLICATE_API_TOKEN.",
+    });
   });
 
-  it("returns the caption sample and demo notice for Hugging Face image failures", async () => {
+  it("returns the caption sample and demo notice for Replicate LLaVA failures", async () => {
+    const replicate = vi.spyOn(replicateMod, "captionWithLlava13bUrl");
     const form = () => {
       const body = new FormData();
       body.set(
@@ -561,7 +560,7 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
       );
 
     for (const status of [403, 404, 410, 500, 502]) {
-      hfMocks.imageToText.mockRejectedValue(providerError(status, "model unavailable"));
+      replicate.mockRejectedValue(replicateApiError(status, "model unavailable"));
       const res = await postImage();
       expect(res.status).toBe(200);
       const body = await res.json();
@@ -574,10 +573,8 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
       expect(JSON.stringify(body)).not.toContain("model unavailable");
     }
 
-    const apiError = new Error("request failed");
-    apiError.name = "ApiError";
-    hfMocks.imageToText.mockRejectedValue(
-      Object.assign(apiError, { response: { status: 404 } })
+    replicate.mockRejectedValue(
+      replicateApiError(404, "request failed")
     );
     const fromApiError = await postImage();
     expect(fromApiError.status).toBe(200);
@@ -585,7 +582,16 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     expect(apiBody.demoData).toBe(true);
     expect(apiBody.notice).toBe(HF_UNAVAILABLE_MESSAGE);
 
-    hfMocks.imageToText.mockRejectedValue(new Error("model is unavailable"));
+    replicate.mockRejectedValue(new Error("REPLICATE_API_TOKEN is not set"));
+    const missingToken = await postImage();
+    expect(missingToken.status).toBe(200);
+    const missingBody = await missingToken.json();
+    expect(missingBody.fixture).toBe(true);
+    expect(missingBody.demoData).toBe(true);
+    expect(missingBody.notice).toBe(HF_UNAVAILABLE_MESSAGE);
+    expect(JSON.stringify(missingBody)).not.toContain("REPLICATE_API_TOKEN");
+
+    replicate.mockRejectedValue(new Error("model is unavailable"));
     const thrown = await postImage();
     expect(thrown.status).toBe(200);
     const thrownBody = await thrown.json();
@@ -594,6 +600,14 @@ describe("POST /api/hf upstream Hugging Face failures", () => {
     expect(JSON.stringify(thrownBody)).not.toContain("model is unavailable");
   });
 });
+
+function replicateApiError(status: number, bodyText: string) {
+  const error = new Error(`Request failed: ${bodyText}`);
+  error.name = "ApiError";
+  return Object.assign(error, {
+    response: { status },
+  });
+}
 
 function pngBytes() {
   return Uint8Array.from(
