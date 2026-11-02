@@ -167,3 +167,12 @@ export function hfTextToImage(
 ) {
   return withHfErrors(() => inference.textToImage(args, { outputType: "blob" }));
 }
+
+/** Existing Hub id already pinned to hf-inference. Do not replace it. */
+export const HF_IMAGE_TO_TEXT_MODEL = "Salesforce/blip-image-captioning-base";
+
+export function hfImageToText(
+  args: Parameters<HfInference["imageToText"]>[0]
+) {
+  return withHfErrors(() => inference.imageToText(args));
+}

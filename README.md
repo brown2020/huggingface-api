@@ -6,9 +6,9 @@ Next.js App Router demo for Hugging Face Inference Providers (chat completion, t
 
 - **Completion** — chat via `@huggingface/inference`, catalog models only
 - **Translation** — same chat path; `targetLang` defaults to French
-- **Image to text** — Replicate LLaVA-13B captioning (polled until the prediction finishes)
+- **Image to text** — Hugging Face image-to-text on `Salesforce/blip-image-captioning-base`. Credits, 402/403/404/410/5xx, a missing model, or any thrown provider error returns the saved caption and a demo notice.
 - **Text to image** — HF `textToImage`; response media type follows the image blob when it is PNG, JPEG, WebP, or GIF
-- **Live first** — with `HF_USE_FIXTURES` unset, chat, translation, and text-to-image call Hugging Face. Credits, quota, HTTP 401, 429, 503, and timeouts return the saved sample and a small “Demo data” badge. A credit or quota failure also shows “The Hugging Face demo is out of credits right now.”
+- **Live first** — with `HF_USE_FIXTURES` unset, chat, translation, text-to-image, and image-to-text call Hugging Face. Credits, quota, HTTP 401, 429, 503, and timeouts return the saved sample and a small “Demo data” badge. A credit or quota failure also shows “The Hugging Face demo is out of credits right now.” Image-to-text also returns that sample and a fixed notice for HTTP 403, 404, 410, other 5xx, and any thrown provider error.
 - **Fixtures** — `HF_USE_FIXTURES=true` skips the provider and returns those samples with the same badge. The flag is off unless set.
 - **Request gate** — optional `HF_API_SECRET`, per-address rate limit, `Origin` check when that header is present, body and image limits
 

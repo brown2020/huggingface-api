@@ -110,6 +110,15 @@ export function classifyUpstreamFailure(error: unknown): UpstreamFailure | null 
     };
   }
 
+  if (status === 404 || status === 410) {
+    return {
+      kind: "unavailable",
+      status,
+      message: HF_UNAVAILABLE_MESSAGE,
+      fallbackToFixtures: false,
+    };
+  }
+
   if (status === 429) {
     return {
       kind: "rate",
@@ -161,6 +170,16 @@ function readStatus(error: unknown): number | undefined {
   if (typeof httpStatus === "number") return httpStatus;
   const status = (error as { status?: unknown }).status;
   if (typeof status === "number" && status >= 100 && status <= 599) return status;
+  // Replicate ApiError stores the HTTP status on `response`, not `httpResponse`.
+  const responseStatus = (error as { response?: { status?: unknown } }).response
+    ?.status;
+  if (
+    typeof responseStatus === "number" &&
+    responseStatus >= 100 &&
+    responseStatus <= 599
+  ) {
+    return responseStatus;
+  }
   return undefined;
 }
 

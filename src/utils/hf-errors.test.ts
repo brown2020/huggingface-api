@@ -98,6 +98,37 @@ describe("classifyUpstreamFailure", () => {
     expect(JSON.stringify(forbidden)).not.toContain("Bearer");
   });
 
+  it("reads a Replicate ApiError status from response", () => {
+    const missing = new Error("request failed");
+    missing.name = "ApiError";
+    const classified = classifyUpstreamFailure(
+      Object.assign(missing, { response: { status: 404 } })
+    );
+    expect(classified).toEqual({
+      kind: "unavailable",
+      status: 404,
+      message: HF_UNAVAILABLE_MESSAGE,
+      fallbackToFixtures: false,
+    });
+
+    const credits = new Error("request failed");
+    credits.name = "ApiError";
+    expect(
+      classifyUpstreamFailure(Object.assign(credits, { response: { status: 402 } }))
+        ?.kind
+    ).toBe("credits");
+    expect(JSON.stringify(classified)).not.toContain(PLANTED_TOKEN);
+  });
+
+  it("maps 410 the same way as a missing model", () => {
+    expect(classifyUpstreamFailure(providerError(410, "gone"))).toMatchObject({
+      kind: "unavailable",
+      status: 410,
+      message: HF_UNAVAILABLE_MESSAGE,
+      fallbackToFixtures: false,
+    });
+  });
+
   it("maps 429 to a fixture fallback", () => {
     const failure = classifyUpstreamFailure(providerError(429, "slow down"));
     expect(failure).toEqual({

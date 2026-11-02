@@ -20,12 +20,12 @@ A single-page demo. The operator picks a task, types the demo password when the 
 | --- | --- | --- | --- |
 | `comp` | JSON `message`, optional `model`, optional `max_tokens` | HF `chatCompletion` | `{ "message": string }` |
 | `translation` | JSON `text`, optional `targetLang` (default French), optional `model` | HF `chatCompletion` with a translation prompt | `{ "message": string }` |
-| `imgtt` | multipart field `image` | Replicate `yorickvp/llava-13b`, polled to a terminal prediction | `{ "message": caption }` |
+| `imgtt` | multipart field `image` | HF `imageToText` on `Salesforce/blip-image-captioning-base` (`hf-inference`) | `{ "message": caption }` |
 | `ttpng` | JSON `prompt`, optional `negative_prompt`, optional `model` | HF `textToImage` | image bytes |
 
 Fixture mode (`HF_USE_FIXTURES=true`) returns labeled text or a 1×1 PNG and sets `fixture: true`, `demoData: true`, or `X-HF-Fixture` and `X-HF-Demo-Data`. It does not call Hugging Face or Replicate. The page shows a small “Demo data” badge.
 
-If fixtures are off, the handler calls Hugging Face. A failure for credits, an exceeded quota, HTTP 401, HTTP 429, HTTP 503, or a timeout returns that same fixture with HTTP 200 and `demoData: true` when the saved samples exist. A credit or quota failure also sets `notice` to `The Hugging Face demo is out of credits right now.` Text-to-image sends that sentence in `X-HF-Notice`. The page shows the badge and the sample. Other provider failures stay JSON errors.
+If fixtures are off, the handler calls Hugging Face. A failure for credits, an exceeded quota, HTTP 401, HTTP 429, HTTP 503, or a timeout returns that same fixture with HTTP 200 and `demoData: true` when the saved samples exist. A credit or quota failure also sets `notice` to `The Hugging Face demo is out of credits right now.` Text-to-image sends that sentence in `X-HF-Notice`. The page shows the badge and the sample. Other provider failures stay JSON errors, except image-to-text: HTTP 403, 404, 410, other 5xx, and a thrown provider error also return the caption sample with `notice`.
 
 ## Models
 
@@ -33,7 +33,7 @@ The UI only offers the catalog in `src/utils/models.ts`. The API rejects any oth
 
 Chat defaults to `deepseek-ai/DeepSeek-V3-0324` with provider `auto`. Image defaults to `black-forest-labs/FLUX.1-dev` with provider `auto`. Stable Diffusion XL is pinned to `fal-ai`. Other catalog entries use `auto`. Aliases in `canonicalizeModelId` map a few legacy ids onto those catalog ids.
 
-Image captioning does not take a model id. It always uses Replicate LLaVA-13B.
+Image captioning does not take a model id from the client. It calls Hugging Face `imageToText` on the existing id `Salesforce/blip-image-captioning-base` with provider `hf-inference`. Any failure from that call — no credits, HTTP 402, 403, 404, 410, or 5xx, a missing model, or a thrown error — returns the saved caption with HTTP 200, `demoData: true`, and `notice` set to a fixed sentence. A bad or missing image is still 400. The saved caption is not a Replicate call.
 
 ## Access control
 
@@ -73,7 +73,7 @@ The shared-secret check in `guardApiRequest` is unchanged and runs before any pr
 | 429 | App rate limit. A Hugging Face 429 uses the fixture row when samples exist. |
 | 503 | Live mode while `HF_API_SECRET` is unset (`Live inference is disabled`), or Hugging Face returned a 5xx other than 503. Body for that provider case is `{ "error": "Hugging Face is unavailable right now." }` A Hugging Face 503 uses the fixture row when samples exist. |
 | 504 | A Hugging Face timeout uses the fixture row when samples exist. Otherwise `{ "error": "Hugging Face timed out. Try again shortly." }` |
-| 500 | Any other failure. Body is `{ "error": "An unexpected error occurred" }`. |
+| 500 | Any other failure, except image-to-text provider failures, which use the caption fixture. Body is `{ "error": "An unexpected error occurred" }`. |
 | 200 fixture | `HF_USE_FIXTURES=true`, or a live credit, quota, 401, 429, 503, or timeout failure while saved samples exist. Credit and quota fallbacks also set `notice` to `The Hugging Face demo is out of credits right now.` |
 
 A credit or quota phrase wins over HTTP 401 or 403, so that failure is not described as a bad token. Classification reads the status and a short slice of the provider message or body, then discards that text. `src/utils/hf.ts` turns the failure into a safe `HttpError` before the route answers. The JSON body and image headers contain only the fixed sentence. The server log records the error name, failure kind, and status. None of those include the provider body, `Authorization`, or the token. The form renders a JSON `error` string in the alert and does not render a non-JSON body.

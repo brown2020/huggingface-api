@@ -23,6 +23,7 @@ Punchlist after the maintenance pass. No open GitHub issues were listed for this
 - **Translation UI is French-only.** Callers of the JSON API can pass `targetLang`.
 - **TypeScript is split.** `tsc` is 7.0.2. The `typescript` package ESLint imports is 6.0.3, because typescript-eslint 8.72.1 accepts only `>=4.8.4 <6.1.0`. TypeScript 7.0.2 is already the newest stable compiler; 7.1 exists only as a dev tag.
 - **minimatch is overridden to 11.0.4.** That is the patched release for the glob-parts advisory. ESLint 10.14 and typescript-eslint 8.72 still request minimatch 10, and `npm audit` would otherwise suggest downgrading ESLint to 4. The override is dev-time only. Production `npm audit --omit=dev` was already clean before it.
+- **Image to text calls Hugging Face first.** The handler uses the existing `Salesforce/blip-image-captioning-base` id. A Replicate `ApiError` used to surface as HTTP 500 because its status lives on `response` and was not classified. Provider failures now return the caption sample and a fixed notice. A bad upload is still 400.
 - **Caption and image calls have no app-level abort** tied to the platform timeout.
 - **A double-click can start two submits** before React disables the button.
 - **`docs/budget.md` points at a script that is not in the repo.**
