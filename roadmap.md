@@ -10,8 +10,9 @@ Punchlist after the maintenance pass. No open GitHub issues were listed for this
 4. Add a target-language control. The API already accepts `targetLang` and defaults to French; the form never sends it.
 5. Replace the in-process rate limit if more than one server instance will face the public internet.
 6. Recheck Hub `inferenceProviderMapping` for the catalog when a model starts failing live. Do not change ids until a mapping is actually retired.
-7. Drop the `@typescript/native` alias after `@typescript-eslint` supports TypeScript 7's compiler API, then depend on `typescript@7` directly.
+7. Drop the `@typescript/native` alias after `@typescript-eslint` supports TypeScript 7's compiler API, then depend on `typescript@7` directly. The newest `typescript` release that satisfies typescript-eslint 8.72.1 (`>=4.8.4 <6.1.0`) is 6.0.3.
 8. Either add `scripts/measure-budget.mjs` or stop citing it from `docs/budget.md`.
+9. Drop the `minimatch` override after ESLint and typescript-eslint depend on minimatch `>=11.0.1` themselves.
 
 ## Known bugs and limits
 
@@ -20,7 +21,8 @@ Punchlist after the maintenance pass. No open GitHub issues were listed for this
 - **Rate limit is per process.** A new instance, or a cold start, resets the 30/minute window. The address comes from `x-forwarded-for` or `x-real-ip` and is only as trustworthy as the proxy in front of the app.
 - **Fixture mode without `HF_API_SECRET` is unauthenticated.** That is intentional so CI can run. It does not call paid APIs. A public fixture deployment can still be spammed up to the rate limit.
 - **Translation UI is French-only.** Callers of the JSON API can pass `targetLang`.
-- **TypeScript is split.** `tsc` is 7.0.2. The `typescript` package ESLint imports is 6.0.3, because typescript-eslint 8.72.1 rejects TypeScript 7.
+- **TypeScript is split.** `tsc` is 7.0.2. The `typescript` package ESLint imports is 6.0.3, because typescript-eslint 8.72.1 accepts only `>=4.8.4 <6.1.0`. TypeScript 7.0.2 is already the newest stable compiler; 7.1 exists only as a dev tag.
+- **minimatch is overridden to 11.0.4.** That is the patched release for the glob-parts advisory. ESLint 10.14 and typescript-eslint 8.72 still request minimatch 10, and `npm audit` would otherwise suggest downgrading ESLint to 4. The override is dev-time only. Production `npm audit --omit=dev` was already clean before it.
 - **Caption and image calls have no app-level abort** tied to the platform timeout.
 - **A double-click can start two submits** before React disables the button.
 - **`docs/budget.md` points at a script that is not in the repo.**

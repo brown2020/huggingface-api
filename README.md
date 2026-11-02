@@ -23,13 +23,15 @@ Locked versions in `package-lock.json`:
 | Framework | Next.js 16.4.3 (App Router) |
 | UI | React 19.3.1, React DOM 19.3.1, Tailwind CSS 4.3.3, react-spinners 0.17.1 |
 | Language | TypeScript 7.0.2 (`tsc` via `@typescript/native`); TypeScript 6.0.3 stays installed as `typescript` so ESLint can load the compiler API |
-| Lint | ESLint 10.13.0, `@typescript-eslint` 8.72.1, `@next/eslint-plugin-next` 16.4.3 |
+| Lint | ESLint 10.14.0, `@typescript-eslint` 8.72.1, `@next/eslint-plugin-next` 16.4.3 |
 | HF | `@huggingface/inference` 4.13.32 |
 | Replicate | `replicate` 1.4.0 |
 | Validation | Zod 4.6.7 |
 | Tests | Vitest 5.0.5, Vite 8.3.5 |
 
 Requires Node.js `>= 24`. CI uses Node 24.
+
+`package.json` overrides `minimatch` to 11.0.4. ESLint 10.14 and typescript-eslint 8.72 still declare minimatch 10, which is the affected range for the glob-parts advisory. The override stays until those packages depend on a patched minimatch.
 
 ## Project structure
 
