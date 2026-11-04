@@ -20,14 +20,14 @@ Locked versions in `package-lock.json`:
 
 | Layer | Package |
 | --- | --- |
-| Framework | Next.js 16.4.3 (App Router) |
-| UI | React 19.3.1, React DOM 19.3.1, Tailwind CSS 4.3.3, react-spinners 0.17.1 |
-| Language | TypeScript 7.0.2 (`tsc` via `@typescript/native`); TypeScript 6.0.3 stays installed as `typescript` so ESLint can load the compiler API |
-| Lint | ESLint 10.14.0, `@typescript-eslint` 8.72.1, `@next/eslint-plugin-next` 16.4.3 |
+| Framework | Next.js 16.4.5 (App Router) |
+| UI | React 19.3.1, React DOM 19.3.1, Tailwind CSS 4.3.4, react-spinners 0.17.1 |
+| Language | TypeScript 7.0.2 (`tsc` via `@typescript/native`); TypeScript 6.0.3 stays installed as `typescript` so ESLint can load the compiler API. `@types/node` stays on 24.19.2 to match the Node 24 runtime. |
+| Lint | ESLint 10.14.0, `@typescript-eslint` 8.72.1, `@next/eslint-plugin-next` 16.4.5 |
 | HF | `@huggingface/inference` 4.13.32 |
 | Replicate | `replicate` 1.4.0 |
 | Validation | Zod 4.6.7 |
-| Tests | Vitest 5.0.5, Vite 8.3.5 |
+| Tests | Vitest 5.1.0, Vite 8.3.5 |
 
 Requires Node.js `>= 24`. CI uses Node 24.
 
